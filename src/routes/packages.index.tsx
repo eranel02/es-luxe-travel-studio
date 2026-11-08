@@ -7,14 +7,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { destinations, packages, destImage, images, ils } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
-type S = { dest?: string; max?: number; from?: string; adults?: number };
+type S = { dest?: string | undefined; max?: number | undefined; from?: string | undefined; adults?: number | undefined };
 
 export const Route = createFileRoute("/packages/")({
-  validateSearch: (s: Record<string, unknown>): S => ({
-    dest: typeof s.dest === "string" ? s.dest : undefined,
-    max: s.max ? Number(s.max) : undefined,
-    from: typeof s.from === "string" ? s.from : undefined,
-    adults: s.adults ? Number(s.adults) : undefined,
+  validateSearch: (q: Record<string, unknown>): S => ({
+    dest: typeof q["dest"] === "string" ? q["dest"] : undefined,
+    max: q["max"] ? Number(q["max"]) : undefined,
+    from: typeof q["from"] === "string" ? q["from"] : undefined,
+    adults: q["adults"] ? Number(q["adults"]) : undefined,
   }),
   head: () => ({
     meta: [
@@ -31,16 +31,16 @@ function Catalog() {
   const s = Route.useSearch();
   const navigate = useNavigate({ from: "/packages/" });
   const [q, setQ] = useState("");
-  const [dests, setDests] = useState<string[]>(s.dest ? [s.dest] : []);
-  const [max, setMax] = useState(s.max ?? 25000);
-  const [from, setFrom] = useState(s.from ?? "");
-  const [travelers, setTravelers] = useState(s.adults ?? 2);
+  const [dests, setDests] = useState<string[]>(s["dest"] ? [s.dest] : []);
+  const [max, setMax] = useState(s["max"] ?? 25000);
+  const [from, setFrom] = useState(s["from"] ?? "");
+  const [travelers, setTravelers] = useState(s["adults"] ?? 2);
   const [stars, setStars] = useState(0);
   const [sort, setSort] = useState<"pop" | "asc" | "desc">("pop");
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
 
-  useEffect(() => { setDests(s.dest ? [s.dest] : []); }, [s.dest]);
+  useEffect(() => { setDests(s["dest"] ? [s.dest] : []); }, [s.dest]);
   useEffect(() => { setLoading(true); const t = setTimeout(() => setLoading(false), 350); return () => clearTimeout(t); }, [q, dests, max, from, stars, sort]);
 
   const list = useMemo(() => {

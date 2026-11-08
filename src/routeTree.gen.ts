@@ -14,6 +14,7 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DealsRouteImport } from './routes/deals'
 import { Route as DestinationsRouteImport } from './routes/destinations'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as QuoteRouteImport } from './routes/quote'
 import { Route as PackagesIndexRouteImport } from './routes/packages.index'
 import { Route as PackagesIdRouteImport } from './routes/packages.$id'
@@ -43,6 +44,11 @@ const DestinationsRoute = DestinationsRouteImport.update({
   path: '/destinations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const QuoteRoute = QuoteRouteImport.update({
   id: '/quote',
   path: '/quote',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/deals': typeof DealsRoute
   '/destinations': typeof DestinationsRoute
+  '/login': typeof LoginRoute
   '/quote': typeof QuoteRoute
   '/packages/$id': typeof PackagesIdRoute
   '/packages/': typeof PackagesIndexRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/deals': typeof DealsRoute
   '/destinations': typeof DestinationsRoute
+  '/login': typeof LoginRoute
   '/quote': typeof QuoteRoute
   '/packages/$id': typeof PackagesIdRoute
   '/packages': typeof PackagesIndexRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/deals': typeof DealsRoute
   '/destinations': typeof DestinationsRoute
+  '/login': typeof LoginRoute
   '/quote': typeof QuoteRoute
   '/packages/$id': typeof PackagesIdRoute
   '/packages/': typeof PackagesIndexRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/deals'
     | '/destinations'
+    | '/login'
     | '/quote'
     | '/packages/$id'
     | '/packages/'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/deals'
     | '/destinations'
+    | '/login'
     | '/quote'
     | '/packages/$id'
     | '/packages'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/deals'
     | '/destinations'
+    | '/login'
     | '/quote'
     | '/packages/$id'
     | '/packages/'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   DealsRoute: typeof DealsRoute
   DestinationsRoute: typeof DestinationsRoute
+  LoginRoute: typeof LoginRoute
   QuoteRoute: typeof QuoteRoute
   PackagesIdRoute: typeof PackagesIdRoute
   PackagesIndexRoute: typeof PackagesIndexRoute
@@ -171,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DestinationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/quote': {
       id: '/quote'
       path: '/quote'
@@ -201,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   DealsRoute: DealsRoute,
   DestinationsRoute: DestinationsRoute,
+  LoginRoute: LoginRoute,
   QuoteRoute: QuoteRoute,
   PackagesIdRoute: PackagesIdRoute,
   PackagesIndexRoute: PackagesIndexRoute,

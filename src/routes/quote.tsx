@@ -7,7 +7,7 @@ import { destinations, packages, images } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/quote")({
-  validateSearch: (s: Record<string, unknown>): { pkg?: string } => ({ pkg: typeof s.pkg === "string" ? s.pkg : undefined }),
+  validateSearch: (s: Record<string, unknown>): { pkg?: string | undefined } => ({ pkg: typeof s["pkg"] === "string" ? s["pkg"] : undefined }),
   head: () => ({
     meta: [
       { title: "בקשת הצעת מחיר | ES TRAVELS" },
@@ -36,17 +36,17 @@ function QuotePage() {
   const validate = () => {
     const e: Record<string, string> = {};
     if (step === 0) {
-      if (!f.dest) e.dest = "יש לבחור יעד";
-      if (!f.from) e.from = "יש לבחור תאריך יציאה";
-      if (!f.to) e.to = "יש לבחור תאריך חזרה";
-      else if (f.from && f.to <= f.from) e.to = "תאריך החזרה חייב להיות אחרי היציאה";
-      if (f.adults < 1) e.adults = "לפחות מבוגר אחד";
+      if (!f.dest) e["dest"] = "יש לבחור יעד";
+      if (!f.from) e["from"] = "יש לבחור תאריך יציאה";
+      if (!f.to) e["to"] = "יש לבחור תאריך חזרה";
+      else if (f.from && f.to <= f.from) e["to"] = "תאריך החזרה חייב להיות אחרי היציאה";
+      if (f.adults < 1) e["adults"] = "לפחות מבוגר אחד";
     }
     if (step === 2) {
-      if (f.name.trim().length < 2) e.name = "יש להזין שם מלא";
-      if (!/^0\d{1,2}-?\d{7}$/.test(f.phone.replace(/\s/g, ""))) e.phone = "מספר טלפון לא תקין (לדוגמה 050-1234567)";
-      if (!/^\S+@\S+\.\S+$/.test(f.email)) e.email = "כתובת אימייל לא תקינה";
-      if (!f.consent) e.consent = "יש לאשר את מדיניות הפרטיות";
+      if (f.name.trim().length < 2) e["name"] = "יש להזין שם מלא";
+      if (!/^0\d{1,2}-?\d{7}$/.test(f.phone.replace(/\s/g, ""))) e["phone"] = "מספר טלפון לא תקין (לדוגמה 050-1234567)";
+      if (!/^\S+@\S+\.\S+$/.test(f.email)) e["email"] = "כתובת אימייל לא תקינה";
+      if (!f.consent) e["consent"] = "יש לאשר את מדיניות הפרטיות";
     }
     setErrors(e);
     return !Object.keys(e).length;
@@ -63,7 +63,7 @@ function QuotePage() {
           <p className="mt-3 text-navy-foreground/75">זוהי הדגמה חזותית: <strong className="text-gold-light">הבקשה לא נשלחה בפועל</strong> ואף סוכן לא קיבל אותה. במערכת האמיתית, סוכן יחזור אליכם תוך 24 שעות.</p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Button asChild variant="gold"><Link to="/">חזרה לדף הבית</Link></Button>
-            <Button asChild variant="glass"><Link to="/proposal">צפו בדוגמת הצעה</Link></Button>
+            <Button asChild variant="glass"><Link to="/packages">לחבילות נוספות</Link></Button>
           </div>
         </div>
       </div>
