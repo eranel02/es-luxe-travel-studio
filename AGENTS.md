@@ -28,3 +28,7 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Application conventions
+- Keep CRM demo state in a client-side provider under the /admin layout, separate from public catalog data, so demo edits cannot change the public site.
+- Use file-based /admin child routes with a shared Outlet shell so direct navigation and refresh resolve every CRM section.
