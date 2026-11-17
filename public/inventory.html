@@ -1,0 +1,2421 @@
+<!doctype html>
+<html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script>
+/* ===========================================================
+   הגדרות Firebase — הדבק כאן את ה-firebaseConfig שלך
+   (Firebase Console > Project settings > Your apps > Web app)
+   =========================================================== */
+window.firebaseConfig = {
+  apiKey: "PASTE_API_KEY",
+  authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
+  projectId: "PASTE_PROJECT_ID",
+  storageBucket: "PASTE_PROJECT_ID.appspot.com",
+  messagingSenderId: "PASTE_SENDER_ID",
+  appId: "PASTE_APP_ID"
+};
+/* כתובת המייל (Google) של הבעלים. חייבת להיות זהה לזו שב-firestore.rules */
+window.OWNER_EMAIL = "your.email@gmail.com";
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<title>ניהול מלאי ושלישות</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&family=Secular+One&display=swap">
+<style>
+:root{color-scheme:light;padding-block:env(safe-area-inset-top,0px) env(safe-area-inset-bottom,0px)}
+body{margin:0;font-family:system-ui,'Heebo',Arial,sans-serif;font-size:14px}
+[hidden]{display:none!important}
+img{max-width:100%}
+#login{min-height:80vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+#login .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px 24px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:14px;text-align:center}
+#login h1{margin:0;font-family:var(--f-display);font-size:26px}
+#login p{margin:0;color:var(--muted)}
+#login input{width:100%}
+
+/* Layout: RTL operations console. Sticky command bar, KPI strip, tabs, then row-cards grouped by company that wrap to two lines on a phone. */
+:root{
+  --bg:#ECEFE8; --surface:#F7F8F4; --surface2:#E2E6DB; --ink:#1B221D; --muted:#58635B; --line:#CBD1C4;
+  --accent:#4A6A2B; --on-accent:#FFFFFF;
+  --ok:#2E6B4F; --ok-bg:#D9EADF; --warn:#85560A; --warn-bg:#F3E6C8; --crit:#A33A31; --crit-bg:#F4D9D5; --info:#28608F; --info-bg:#D6E5F1;
+  --scrim:rgba(12,16,13,.55);
+  --f-body:'Heebo',system-ui,'Segoe UI',Arial,sans-serif;
+  --f-display:'Secular One','Heebo',system-ui,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#111612; --surface:#19201A; --surface2:#222B24; --ink:#E6EBE2; --muted:#98A496; --line:#2D372F;
+    --accent:#A6C46F; --on-accent:#162006;
+    --ok:#7CC49C; --ok-bg:#1D3328; --warn:#E0B25B; --warn-bg:#3A2F17; --crit:#EE8A80; --crit-bg:#3E2220; --info:#86B7E3; --info-bg:#1B2E40;
+    --scrim:rgba(0,0,0,.65); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111612; --surface:#19201A; --surface2:#222B24; --ink:#E6EBE2; --muted:#98A496; --line:#2D372F;
+  --accent:#A6C46F; --on-accent:#162006;
+  --ok:#7CC49C; --ok-bg:#1D3328; --warn:#E0B25B; --warn-bg:#3A2F17; --crit:#EE8A80; --crit-bg:#3E2220; --info:#86B7E3; --info-bg:#1B2E40;
+  --scrim:rgba(0,0,0,.65); color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--surface);z-index:10}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--surface);border-bottom:1px solid var(--line)}
+.wrap{max-width:1100px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.topin{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-block:12px}
+.brand{min-width:0}
+.brand h1{margin:0;font-family:var(--f-display);font-weight:400;font-size:22px;line-height:1.2;text-wrap:balance}
+.me{font-size:12px;color:var(--muted)}
+main.wrap{padding-block:16px 40px;display:flex;flex-direction:column;gap:16px}
+.btn{border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);border-radius:8px;padding:8px 14px;min-height:40px;font-weight:700;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.danger{background:transparent;color:var(--crit);border-color:var(--crit)}
+.btn.sm{min-height:34px;padding:5px 10px;font-size:13px}
+.btn:disabled{opacity:.55;cursor:default}
+.banner{background:var(--crit-bg);color:var(--crit);border:1px solid var(--crit);border-radius:8px;padding:10px 12px}
+.banner.soft{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.kpi span{font-size:12px;color:var(--muted)}
+.kpi b{font-family:var(--f-display);font-weight:400;font-size:28px;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi small{font-family:var(--f-body);font-size:12px;color:var(--muted)}
+.kpi.ok b{color:var(--ok)} .kpi.warn b{color:var(--warn)} .kpi.info b{color:var(--info)}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:4px;background:var(--surface2);border-radius:10px}
+.tab{border:0;background:transparent;border-radius:7px;padding:8px 14px;white-space:nowrap;font-weight:500;color:var(--muted);cursor:pointer;min-height:38px}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);font-weight:700}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.bar input[type=search]{flex:1 1 220px;min-width:0}
+input,select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px;max-width:100%}
+textarea{width:100%}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700}
+label.f input,label.f select{font-weight:400;font-size:15px;width:100%}
+.costrip{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.co{position:relative;overflow:hidden;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px 12px;display:flex;justify-content:space-between;gap:8px;cursor:pointer}
+.co b{font-variant-numeric:tabular-nums;color:var(--ok)}
+.co i{position:absolute;inset:auto 0 0 0;height:4px;background:var(--surface2)}
+.co i::after{content:"";position:absolute;inset:0 0 0 auto;width:var(--p);background:var(--ok)}
+.co.on{border-color:var(--accent);outline:1px solid var(--accent)}
+.grp{margin:14px 0 2px;font-size:13px;color:var(--muted);font-weight:700;letter-spacing:.04em}
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.1fr) minmax(0,1fr) auto;gap:8px 16px;align-items:center;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.who{min-width:0}
+.meta{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:12px;color:var(--muted)}
+.mono{font-family:var(--f-mono);font-size:12px}
+.muted{color:var(--muted)} small.muted{display:block;font-size:11px}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+button.link{background:none;border:0;padding:0;font-weight:700;font-size:16px;cursor:pointer;text-align:right}
+button.link:hover{color:var(--accent);text-decoration:underline}
+.pill{display:inline-block;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;border:1px solid transparent}
+select.pill{appearance:none;min-height:30px;padding:3px 12px;cursor:pointer}
+select.pill option{background:var(--surface);color:var(--ink)}
+.pill.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.pill.crit{background:var(--crit-bg);color:var(--crit);border-color:var(--crit)}
+.pill.info{background:var(--info-bg);color:var(--info);border-color:var(--info)}
+.tag{display:inline-block;border-radius:5px;padding:0 6px;font-size:11px;font-weight:700;border:1px solid transparent}
+.tag.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.tag.crit{background:var(--crit-bg);color:var(--crit);border-color:var(--crit)}
+.seg{display:flex;gap:4px;flex-wrap:wrap}
+.seg button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 12px;min-height:36px;cursor:pointer;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;cursor:pointer;text-align:right}
+.item:hover{border-color:var(--accent)}
+.item h3{margin:0;font-size:17px}
+.nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:6px;text-align:center}
+.nums div{background:var(--surface2);border-radius:8px;padding:6px}
+.nums span{display:block;font-size:11px;color:var(--muted)}
+.nums b{font-size:20px;font-variant-numeric:tabular-nums}
+.meter{height:6px;background:var(--surface2);border-radius:99px;overflow:hidden}
+.meter i{display:block;height:100%;width:var(--p);background:var(--warn)}
+.log{grid-template-columns:110px auto minmax(0,1.4fr) minmax(0,1.4fr) minmax(0,1fr)}
+.log time{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.panel h3{margin:0;font-size:16px}
+.ucard{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.uhead{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center}
+.checks{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:14px}
+.checks label{display:flex;gap:6px;align-items:center}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:99px;padding:3px 4px 3px 12px}
+.chip button{border:0;background:var(--line);border-radius:99px;width:22px;height:22px;cursor:pointer;line-height:1}
+.hit{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line)}
+.empty{margin:0;padding:18px;text-align:center;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:10px}
+.note{font-size:13px;color:var(--muted);margin:0}
+.scrim{position:fixed;inset:0;z-index:30;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.dlg{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;width:min(640px,100%);max-height:100%;display:flex;flex-direction:column;overflow:hidden}
+.dlg>header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.dlg>header h2{margin:0;font-size:17px}
+.dlg .body{padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;min-height:0}
+.dlg>footer{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--line)}
+.x{border:0;background:transparent;font-size:20px;cursor:pointer;line-height:1;padding:4px 8px;border-radius:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.crow{display:grid;grid-template-columns:minmax(0,1fr) 84px auto;gap:8px;align-items:center}
+.crow input{min-width:0;width:100%}
+.crow.w{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) auto}
+.sugs{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:6px}
+.sug{display:flex;justify-content:space-between;align-items:center;gap:4px 12px;flex-wrap:wrap;text-align:right;border:0;border-top:1px solid var(--line);background:var(--surface);padding:10px 12px;min-height:44px;cursor:pointer;width:100%}
+.sug:first-child{border-top:0}
+.sug:hover,.sug.on{background:var(--surface2)}
+.chosen{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg);border:1px solid var(--accent);border-radius:10px;padding:10px 12px}
+.picks{border:1px solid var(--line);border-radius:10px;max-height:260px;overflow-y:auto}
+.pick{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border-top:1px solid var(--line)}
+.pick:first-child{border-top:0}
+.pick label{display:flex;gap:10px;align-items:flex-start;cursor:pointer;min-width:0}
+.pick label span{display:flex;flex-direction:column;min-width:0}
+.pick small{font-size:12px;color:var(--muted)}
+.att{display:inline-flex;gap:4px;align-items:center;font-size:12px;margin-inline-start:6px;cursor:pointer}
+.row.s3{grid-template-columns:minmax(0,2fr) minmax(0,1.4fr) auto}
+.warnline{font-size:12px;background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:6px 8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.qty{width:76px;text-align:center}
+.pick.col{flex-direction:column;align-items:stretch}
+.units{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding-inline-start:28px}
+.unit{border:1px solid var(--line);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px}
+.unithead{display:flex;justify-content:space-between;align-items:center}
+.err{color:var(--crit);font-weight:700;min-height:1.4em;margin:0}
+details.bk{border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+details.bk summary{display:flex;justify-content:space-between;gap:8px;padding:10px 12px;cursor:pointer;font-weight:700}
+details.bk .in{padding:0 12px 12px;display:flex;flex-direction:column;gap:6px}
+.sr{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.toast{position:fixed;z-index:40;inset:auto 0 0 0;display:flex;justify-content:center;padding:0 16px max(16px,env(safe-area-inset-bottom,0px));pointer-events:none}
+.toast span{background:var(--ink);color:var(--bg);border-radius:8px;padding:10px 16px;font-weight:700}
+@media (max-width:720px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .row{grid-template-columns:1fr 1fr}
+  .row.s3{grid-template-columns:1fr 1fr}
+  .row .who{grid-column:1/-1}
+  .row .acts{grid-column:1/-1}
+  .log{grid-template-columns:1fr auto}
+  .log>*:nth-child(n+3){grid-column:1/-1}
+  .grid2{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+
+/* ===== v29 · ממשק משופר: טלפון + מחשב ===== */
+[hidden]{display:none!important}
+:root{--shadow:0 1px 2px rgba(20,30,20,.07),0 6px 18px rgba(20,30,20,.05);--nav-h:62px}
+body{-webkit-tap-highlight-color:transparent;text-rendering:optimizeLegibility}
+.wrap{max-width:1180px}
+.top{box-shadow:var(--shadow)}
+.topin{flex-wrap:nowrap;justify-content:flex-start;gap:8px;padding-block:12px}
+.brand{margin-inline-end:auto}
+.brand h1{font-size:24px}
+.me{margin-top:1px}
+#btnStamp{min-height:44px;padding-inline:20px;font-size:15px;box-shadow:var(--shadow)}
+#btnBackup .bt{white-space:nowrap}
+.btn{transition:filter .12s,transform .06s}
+.btn:hover:not(:disabled){filter:brightness(1.06)}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn.ghost:hover:not(:disabled){background:var(--surface2);filter:none}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.kpi{flex-direction:row;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-radius:12px;box-shadow:var(--shadow)}
+.kpi span{font-size:13px}
+.kpi b{font-size:30px}
+.tabs{background:transparent;padding:0;border-radius:0;border-bottom:1px solid var(--line);gap:2px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs:empty{display:none}
+.tab{display:inline-flex;align-items:center;gap:8px;border-radius:10px 10px 0 0;border-bottom:3px solid transparent;margin-bottom:-1px;padding:10px 16px;min-height:44px;font-size:15px}
+.tab:hover{background:var(--surface2);color:var(--ink)}
+.tab[aria-selected="true"]{background:transparent;color:var(--accent);border-bottom-color:var(--accent)}
+.tab .ic{width:18px;height:18px;flex:none;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}
+.tab .ts{display:none}
+.tab[data-v="soldiers"] .ic{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8'/%3E%3C/svg%3E")}
+.tab[data-v="inventory"] .ic{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8l-9-5-9 5v8l9 5 9-5V8zM3.3 7.5L12 12l8.7-4.5M12 22V12'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 8l-9-5-9 5v8l9 5 9-5V8zM3.3 7.5L12 12l8.7-4.5M12 22V12'/%3E%3C/svg%3E")}
+.tab[data-v="weapons"] .ic{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M22 12h-4M6 12H2M12 6V2M12 22v-4'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M22 12h-4M6 12H2M12 6V2M12 22v-4'/%3E%3C/svg%3E")}
+.tab[data-v="forms"] .ic{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h6'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h6'/%3E%3C/svg%3E")}
+.tab[data-v="log"] .ic{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M12 6v6l4 2'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20M12 6v6l4 2'/%3E%3C/svg%3E")}
+.tab[data-v="users"] .ic{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6'/%3E%3C/svg%3E")}
+.tab[data-v="company"] .ic{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 21h18M5 21V7l7-4 7 4v14M9 9h1M14 9h1M9 13h1M14 13h1M9 17h6'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 21h18M5 21V7l7-4 7 4v14M9 9h1M14 9h1M9 13h1M14 13h1M9 17h6'/%3E%3C/svg%3E")}
+.tab[data-v="dl"] .ic{-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3'/%3E%3C/svg%3E")}
+
+.row,.item,.panel,.co{border-radius:12px;box-shadow:var(--shadow)}
+.row{transition:border-color .12s}
+.row:hover{border-color:var(--accent)}
+.item{transition:border-color .12s,transform .12s}
+.item:hover{transform:translateY(-1px)}
+.co{min-height:44px;align-items:center}
+.grp{display:flex;align-items:center;gap:10px}
+.grp::after{content:"";flex:1;height:1px;background:var(--line)}
+.bar{gap:8px}
+.bar>.seg{margin-inline-end:6px}
+.bar select{min-width:140px}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent);outline-offset:0}
+.dlg{border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.dlg>footer{position:sticky;bottom:0;background:var(--surface)}
+.toast{bottom:0}
+@media (pointer:coarse){
+  .btn{min-height:46px}.btn.sm{min-height:42px}
+  input,select,textarea{min-height:46px}
+  .seg button{min-height:42px}.pill{min-height:36px}
+  .att{min-height:36px}
+  input[type=checkbox],input[type=radio]{width:22px;height:22px;min-height:0}
+}
+@media (max-width:720px){
+  body{font-size:15px}
+  .topin{padding-block:8px}
+  .brand{min-width:0}
+  .brand h1{font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .me{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #btnOut{min-height:38px;padding:4px 12px;font-size:13px;flex:none}
+  #btnBackup{flex:none;width:42px;min-height:38px;padding:0;font-size:0;display:inline-flex;align-items:center;justify-content:center}
+  #btnBackup .bt{display:none}
+  #btnBackup::before{content:"";width:20px;height:20px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3'/%3E%3C/svg%3E") center/contain no-repeat}
+  #btnStamp{position:fixed;z-index:21;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 14px);min-height:52px;border-radius:26px;padding-inline:22px;font-size:16px;box-shadow:0 6px 20px rgba(0,0,0,.28)}
+  main.wrap{padding-block:12px calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 90px);gap:12px}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .kpi{padding:8px 12px}
+  .kpi b{font-size:22px}
+  .kpi span{font-size:12px}
+  .tabs{position:fixed;inset:auto 0 0 0;z-index:20;margin:0;background:var(--surface);border-top:1px solid var(--line);border-bottom:0;gap:0;overflow:hidden;padding:6px max(4px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(4px,env(safe-area-inset-left,0px));box-shadow:0 -4px 16px rgba(0,0,0,.07)}
+  .tab{flex:1 1 0;min-width:0;flex-direction:column;justify-content:center;gap:2px;border:0;border-radius:12px;padding:5px 2px;min-height:50px;font-size:11px;line-height:1.15;margin:0}
+  .tab[aria-selected="true"]{background:var(--surface2);border:0}
+  .tab .ic{width:22px;height:22px}
+  .tab .tl{display:none}
+  .tab .ts{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar{gap:8px}
+  .bar input[type=search]{flex:1 1 100%}
+  .bar select{flex:1 1 calc(50% - 8px);min-width:0}
+  .bar>.btn{flex:1 1 calc(50% - 8px)}
+  .bar>.seg{flex:1 1 100%;margin:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .bar>.seg::-webkit-scrollbar{display:none}
+  .bar>.seg button{flex:0 0 auto}
+  input,select,textarea{font-size:16px}
+  .costrip{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .row{padding:12px}
+  .row .acts .btn{flex:1}
+  .cards{grid-template-columns:1fr}
+  .scrim{align-items:flex-end;padding:0}
+  .dlg{width:100%;max-height:92dvh;border-radius:18px 18px 0 0;border-bottom:0}
+  .dlg>footer{padding-bottom:max(12px,env(safe-area-inset-bottom,0px))}
+  .dlg>footer .btn{flex:1}
+  .toast{bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 80px)}
+  .crow,.crow.w{grid-template-columns:minmax(0,1fr) 70px auto}
+  .crow.w{grid-template-columns:minmax(0,1fr) auto}
+}
+.dlg>footer{justify-content:flex-start}
+#login .card{border-radius:16px;box-shadow:var(--shadow);padding:30px 24px;max-width:400px}
+#login .card::before{content:"";display:block;width:56px;height:56px;margin:0 auto 4px;border-radius:16px;background:var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3Cpath d='M9 12l2 2 4-4'/%3E%3C/svg%3E") center/30px no-repeat}
+#login .btn{min-height:48px;width:100%;font-size:16px}
+#login input{min-height:48px;font-size:16px}
+@media (max-width:720px){
+  .dlg .seg button{flex:1 1 0}
+  .bar>.btn.ghost{min-height:42px;font-size:14px}
+}
+@media (min-width:721px) and (max-width:1000px){
+  .tab{padding:10px 12px}
+  .bar input[type=search]{flex:1 1 100%}
+}
+</style></head><body>
+
+
+<div id="login" dir="rtl"><div class="card"><h1>ניהול מלאי ושלישות</h1>
+<div id="loginBtns" hidden><p>התחבר עם חשבון Google. בכניסה הראשונה תתבקש להירשם, וההרשמה מותרת רק למי שנמצא במאגר החיילים.</p><button type="button" class="btn" id="btnGoogle">התחברות עם Google</button></div>
+<div id="claimBox" hidden><p>מחובר כ-<b id="claimWho"></b>. <b>הרשמה למערכת:</b> רק מי שהשם שלו מופיע במאגר יכול להירשם. הזן את הפרטים כפי שהם רשומים בכרטיס שלך. אחרי ההרשמה המנהל יאשר אותך ויגדיר לך הרשאות.</p>
+<input id="cNo" placeholder="מספר אישי" inputmode="numeric" autocomplete="off" aria-label="מספר אישי">
+<input id="cId" placeholder="תעודת זהות" inputmode="numeric" autocomplete="off" aria-label="תעודת זהות">
+<input id="cPhone" placeholder="טלפון (05X-XXXXXXX)" inputmode="tel" dir="ltr" aria-label="טלפון">
+<button type="button" class="btn" id="btnClaim">הרשמה</button><button type="button" class="btn ghost" id="btnClaimOut">יציאה</button></div>
+<p id="loginMsg" role="alert">טוען…</p></div></div>
+<div id="app" dir="rtl" hidden>
+  <header class="top"><div class="wrap topin">
+    <div class="brand"><h1>ניהול מלאי ושלישות</h1><div class="me" id="me"></div></div>
+    <button class="btn ghost" id="btnOut" data-act="signOut">יציאה</button>
+    <button class="btn ghost" id="btnBackup" data-act="exportAll" aria-label="גיבוי מלא לאקסל" hidden><span class="bt">גיבוי מלא לאקסל</span></button>
+    <button class="btn" id="btnStamp" data-act="stamp" hidden>החתמה / זיכוי</button>
+  </div></header>
+  <main class="wrap">
+    <div id="banner" class="banner" role="alert" hidden></div>
+    <div class="kpis" id="kpis"></div>
+    <nav class="tabs" id="tabs" role="tablist"></nav>
+    <section id="view"><p class="empty">טוען נתונים…</p></section>
+  </main>
+  <div id="modal"></div>
+  <div class="toast" id="toast" aria-live="polite"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function(){
+'use strict';
+var $=function(s,r){return (r||document).querySelector(s)};
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+
+var DOMAINS=['אפסנאות','נשקייה'];
+var CATS=['ציוד אישי','נשק','צל"ם / אופטיקה','תקשוב','ביגוד','אמצעים','רפואה'];
+var COMPANIES_FALLBACK=["פלוגה א'","פלוגה ב'","פלוגה ג'",'מסייעת','מפקדה'];
+var STATUS={ARRIVED:{t:'התייצב',c:'ok'},RELEASED:{t:'שוחרר',c:'info'},NOT_ARRIVED:{t:'טרם התייצב',c:'crit'}};
+var PERM_LABELS={stamp:'החתמה וזיכוי',status:'עדכון סטטוס שלישות',manageSoldiers:'שלישות: הוספה, עריכה ומחיקה של חיילים',viewInventory:'צפייה בקטלוג ומלאי',manageInventory:'ניהול קטלוג ומלאי כולל',viewLog:'צפייה ביומן תנועות',creditFromRelease:'מעבר לזיכוי מחלון שחרור חייל',exportData:'ייצוא לאקסל וגיבוי',viewForms:'ריכוז טפסי חתימה (צפייה וחיפוש)',viewSoldierFile:'תיק החתמה לחייל (צפייה ויצירה)'};
+var PERM_KEYS=Object.keys(PERM_LABELS);
+var ROLES={
+  logistics:{label:'קצין לוגיסטיקה',perms:{stamp:true,manageInventory:true,viewLog:true,viewInventory:true,creditFromRelease:true,exportData:true,viewForms:true,viewSoldierFile:true},domains:['אפסנאות','נשקייה']},
+  quartermaster:{label:'אפסנאי',perms:{stamp:true,viewLog:true,viewInventory:true,viewForms:true,viewSoldierFile:true},domains:['אפסנאות']},
+  armorer:{label:'נשקאי',perms:{stamp:true,viewLog:true,viewInventory:true,viewForms:true,viewSoldierFile:true},domains:['נשקייה']},
+  personnel:{label:'שלישות',perms:{status:true,manageSoldiers:true},domains:[]},
+  viewer:{label:'צופה',perms:{},domains:[]}
+};
+var RULES=[
+  {path:'',read:'interact',write:'admin'},
+  {path:'soldiers',write:'interact'},
+  {path:'status',write:'interact'},
+  {path:'transactions',read:'admin'},
+  {path:'receipts',read:'admin'},
+  {path:'inventory',read:'admin'},
+  {path:'weapons',read:'admin'},
+  {path:'sets',read:'admin'},
+  {path:'roles',read:'interact',write:'owner'}
+];
+
+var S={links:{},receipts:{},fq:'',fco:'ALL',soldiers:{},inventory:{},transactions:{},status:{},roles:{},sets:{},weapons:{},config:null,names:{},loaded:{},
+  tab:'soldiers',q:'',co:'ALL',st:'ALL',invQ:'',invDom:'ALL',logQ:'',
+  perm:null,uid:null,owner:false,meName:'',db:null,user:null,booted:false,dirty:false,
+  idx:{held:{},issued:{}}};
+var M=null, B=null, F=null, C=null, G=null;
+S.errs=[]; S.needAll=false; S.invGroup='ALL'; S.wpItem='ALL'; S.wpSt='ALL'; S.wpQ='';
+window.addEventListener('error',function(e){S.errs.push('js:'+String(e.message||'').slice(0,60))});
+
+/* ---------- derived data ---------- */
+function nz(v){return String(v||'').trim().replace(/\s+/g,' ')}
+function derive(){
+  var held={},issued={},cheld={},units={},lastRet={},lastIssue={},conf=0;
+  var keys=Object.keys(S.transactions).sort(function(a,b){return String(S.transactions[a].ts).localeCompare(String(S.transactions[b].ts))});
+  keys.forEach(function(k){
+    var t=S.transactions[k], q=t.type==='issue'?t.quantity:-t.quantity;
+    if(t.scope==='company'){
+      var key=t.itemId||ckey(t.itemName);
+      var ch=cheld[t.company]||(cheld[t.company]={});
+      var e=ch[key]||(ch[key]={count:0,itemId:t.itemId||null,name:t.itemName||''});
+      e.count+=q;
+      if(t.itemId)issued[t.itemId]=(issued[t.itemId]||0)+q;
+      return;
+    }
+    var h=held[t.soldierId]||(held[t.soldierId]={});
+    h[t.itemId]=(h[t.itemId]||0)+q;
+    issued[t.itemId]=(issued[t.itemId]||0)+q;
+    if(t.serial||t.weaponNo){
+      var uk=(t.itemId||'')+'|'+(t.serial?'s:'+t.serial:'w:'+t.weaponNo);
+      if(t.type==='issue'){if(units[uk])conf++;units[uk]={key:uk,itemId:t.itemId,serial:t.serial||'',weaponNo:t.weaponNo||'',soldierId:t.soldierId};lastIssue[uk]={soldierId:t.soldierId,ts:t.ts}}
+      else{delete units[uk];lastRet[uk]=t.ts}
+    }
+  });
+  S.idx={held:held,issued:issued,cheld:cheld,units:units,lastRet:lastRet,lastIssue:lastIssue,conf:conf};
+}
+function unitsHeldBy(sid,iid){
+  var u=(S.idx&&S.idx.units)||{};
+  return Object.keys(u).map(function(k){return u[k]}).filter(function(x){return x.soldierId===sid&&(!iid||x.itemId===iid)});
+}
+function unitConflict(iid,serial,wno){
+  var u=(S.idx&&S.idx.units)||{}, ks=Object.keys(u), s=nz(serial).toLowerCase(), w=nz(wno).toLowerCase();
+  for(var i=0;i<ks.length;i++){
+    var x=u[ks[i]]; if(x.itemId!==iid)continue;
+    if((s&&nz(x.serial).toLowerCase()===s)||(w&&nz(x.weaponNo).toLowerCase()===w))return x;
+  }
+  return null;
+}
+function isAttached(id){return !!(S.status[id]&&S.status[id].attached)}
+function stampBlock(sid){
+  var st=statusOf(sid);
+  if(st==='NOT_ARRIVED')return 'החייל טרם התייצב בשלישות. אי אפשר להחתים אותו עד שהשלישות תסמן התייצבות.';
+  if(st==='RELEASED')return 'החייל סומן כמשוחרר. אי אפשר להחתים אותו.';
+  return '';
+}
+function statusTag(id){
+  var st=statusOf(id);
+  return '<span class="pill '+STATUS[st].c+'">'+STATUS[st].t+'</span>'+(isAttached(id)?' <span class="pill info">בסיפוח</span>':'');
+}
+function writeStatus(id,patch){
+  var cur=S.status[id]||{};
+  var doc={value:cur.value||'NOT_ARRIVED',attached:!!cur.attached,by:S.uid,at:new Date().toISOString()};
+  if(cur.holds!=null)doc.holds=cur.holds;
+  Object.keys(patch).forEach(function(k){doc[k]=patch[k]});
+  return S.db.doc('status/'+id).set(doc);
+}
+function stuckBanner(){
+  var ids=Object.keys(S.soldiers).filter(function(id){return statusOf(id)==='RELEASED'&&holdsAny(id)});
+  if(!ids.length)return '';
+  return '<div class="banner" style="margin-bottom:12px"><b>'+ids.length+' חיילים שוחררו ועדיין חתומים על ציוד</b><div class="chips" style="margin-top:8px">'+
+    ids.map(function(id){var n=heldItems(id).reduce(function(a,x){return a+x.count},0);var lab=esc(S.soldiers[id].name)+(canSeeDetail()?' · '+n+' פריטים':'');return can('creditFromRelease')&&canSeeDetail()?'<button type="button" class="btn ghost sm" data-act="profile" data-id="'+esc(id)+'">'+lab+'</button>':'<span class="pill warn">'+lab+'</span>'}).join('')+'</div></div>';
+}
+function openReleaseConfirm(id){
+  var s=S.soldiers[id]; if(!s)return;
+  var h=heldItems(id);
+  modal(dlgHead('שחרור חייל עם ציוד חתום')+
+    '<div class="body"><div class="banner">'+esc(s.name)+' עדיין חתום על ציוד. '+(canSeeDetail()?'כדאי לזכות אותו לפני שמסמנים שחרור.':'מומלץ לתאם עם הלוגיסטיקה לפני סימון שחרור.')+'</div>'+(canSeeDetail()?'<div class="list">'+
+    h.map(function(x){var i=x.item||{};return '<div class="sr"><b>'+esc(i.name||x.itemId)+'</b><span class="pill warn">'+x.count+' יח׳</span></div>'}).join('')+'</div>':'')+'</div>'+
+    '<footer>'+(can('stamp')&&can('creditFromRelease')&&canSeeDetail()?'<button type="button" class="btn" data-act="stampFor" data-id="'+esc(id)+'">מעבר לזיכוי</button>':'')+'<button type="button" class="btn danger" data-act="relConfirm" data-id="'+esc(id)+'">סימון שחרור בכל זאת</button><button type="button" class="btn ghost" data-act="close">ביטול</button></footer>');
+}
+function unitLines(sid,iid){
+  return unitsHeldBy(sid,iid).map(function(u){
+    return '<div class="mono" style="font-size:12px">'+(u.serial?"צ' "+esc(u.serial):'')+(u.serial&&u.weaponNo?' · ':'')+(u.weaponNo?esc(u.weaponNo):'')+'</div>';
+  }).join('');
+}
+function setsStatusHtml(id){
+  var ids=setIds().filter(function(k){return Object.keys(S.sets[k].items||{}).length});
+  if(!ids.length)return '';
+  return '<div><b style="font-size:13px">סטים</b><div class="list" style="margin-top:8px">'+ids.map(function(k){
+    var set=S.sets[k], miss=[];
+    Object.keys(set.items||{}).forEach(function(iid){
+      var it=S.inventory[iid]; if(!it)return;
+      var need=Number(set.items[iid])-heldCount(id,iid);
+      if(need>0)miss.push(esc(it.name)+' × '+need);
+    });
+    var ok=!miss.length;
+    return '<div class="sr"><div><b>'+esc(set.name)+'</b>'+(ok?'':'<div class="muted" style="font-size:12px">חסר: '+miss.join(' · ')+'</div>')+'</div><span class="pill '+(ok?'ok':'crit')+'">'+(ok?'הושלם':'חסרים '+miss.length)+'</span></div>';
+  }).join('')+'</div></div>';
+}
+function companyHeld(c,iid){var e=S.idx.cheld&&S.idx.cheld[c]&&S.idx.cheld[c][iid];return e?Math.max(0,e.count):0}
+function heldItems(sid){
+  var h=S.idx.held[sid]||{};
+  return Object.keys(h).filter(function(i){return h[i]>0}).map(function(i){return {itemId:i,count:h[i],item:S.inventory[i]}});
+}
+function heldCount(sid,iid){return (S.idx.held[sid]&&S.idx.held[sid][iid])||0}
+function issuedOf(i){return Math.max(0,S.idx.issued[i]||0)}
+function availOf(i){return Math.max(0,((S.inventory[i]&&S.inventory[i].total)||0)-issuedOf(i))}
+function statusOf(sid){return (S.status[sid]&&S.status[sid].value)||'NOT_ARRIVED'}
+function companies(){return (S.config&&S.config.companies&&S.config.companies.length)?S.config.companies:COMPANIES_FALLBACK}
+function allCompanies(){
+  var c=companies().slice();
+  Object.keys(S.soldiers).forEach(function(k){var x=S.soldiers[k].company; if(x&&c.indexOf(x)<0)c.push(x)});
+  Object.keys((S.idx&&S.idx.cheld)||{}).forEach(function(x){if(x&&c.indexOf(x)<0)c.push(x)});
+  return c;
+}
+function nameOf(id){
+  if(!id)return 'משתמש';
+  if(S.soldiers[id]&&S.soldiers[id].name)return S.soldiers[id].name;
+  if(id===S.uid&&S.meName)return S.meName;
+  return S.names[id]||'משתמש';
+}
+function resolveNames(ids){
+  var need=[],seen={};
+  ids.forEach(function(i){if(i&&!(i in S.names)&&!seen[i]){seen[i]=1;need.push(i)}});
+  if(!need.length||!S.user)return;
+  S.user.profiles(need).then(function(ps){
+    need.forEach(function(i){S.names[i]=(ps[i]&&ps[i].name)||''});
+    liveRender();
+  });
+}
+var fmt=function(ts){try{return new Date(ts).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}catch(e){return ts}};
+
+/* ---------- permissions ---------- */
+function computePerm(){
+  if(S.owner){var op={owner:true,domains:DOMAINS.slice(),role:'owner'};PERM_KEYS.forEach(function(k){op[k]=true});S.perm=op;return}
+  var r=S.uid&&S.roles[S.uid];
+  if(window.FB_MODE&&r&&S.uid!==S.fbUid&&r.uid!==S.fbUid)r=null;
+  if(!r){S.perm=null;return}
+  var p={owner:false,domains:Array.isArray(r.domains)?r.domains:[],role:r.role};
+  PERM_KEYS.forEach(function(k){p[k]=!!(r.perms&&r.perms[k])});
+  S.perm=p;
+}
+function can(k){return !!(S.perm&&S.perm[k])}
+function canSeeOps(){return !!(S.owner||can('stamp')||can('viewLog')||can('manageInventory')||can('viewInventory')||can('viewForms')||can('viewSoldierFile'))}
+function canSeeDetail(){return !!(S.loaded.transactions&&(S.owner||can('stamp')||can('viewLog')||can('viewSoldierFile')))}
+function holdsAny(id){
+  if(S.loaded.transactions)return heldItems(id).length>0;
+  return !!(S.status[id]&&S.status[id].holds>0);
+}
+var syncT=0;
+function syncHolds(){
+  clearTimeout(syncT);
+  syncT=setTimeout(function(){
+    if(!S.loaded.transactions||!S.loaded.status||!(S.owner||can('stamp')))return;
+    var n=0;
+    Object.keys(S.soldiers).forEach(function(id){
+      if(n>=300)return;
+      var c=heldItems(id).reduce(function(a,x){return a+x.count},0);
+      var cur=S.status[id];
+      if((cur&&cur.holds||0)===c)return;
+      if(!cur&&c===0)return;
+      n++;
+      var ref=S.db.doc('status/'+id);
+      (cur?ref.update({holds:c}):ref.set({value:'NOT_ARRIVED',attached:false,holds:c,by:S.uid,at:new Date().toISOString()})).catch(function(){});
+    });
+  },2500);
+}
+
+/* ---------- toast / banner / modal ---------- */
+var toastT;
+function toast(msg){
+  var t=$('#toast'); t.innerHTML='<span>'+esc(msg)+'</span>';
+  clearTimeout(toastT); toastT=setTimeout(function(){t.innerHTML=''},3200);
+}
+function banner(msg,soft){var b=$('#banner'); b.textContent=msg; b.className='banner'+(soft?' soft':''); b.hidden=!msg}
+function modal(html){
+  $('#modal').innerHTML='<div class="scrim" data-act="closeBg"><div class="dlg" role="dialog" aria-modal="true">'+html+'</div></div>';
+  var f=$('#modal input:not([type=checkbox]),#modal select'); if(f&&!/Mobi|Android/i.test(navigator.userAgent))f.focus();
+}
+function closeModal(){$('#modal').innerHTML='';M=null;B=null;F=null;C=null;G=null;T=null;W=null;E=null;SF=null;SG=null}
+function dlgHead(title,sub){return '<header><div><h2>'+esc(title)+'</h2>'+(sub?'<div class="meta">'+sub+'</div>':'')+'</div><button type="button" class="x" data-act="close" aria-label="סגירה">✕</button></header>'}
+
+/* ---------- shell rendering ---------- */
+function renderHeader(){
+  var r=S.perm?(S.perm.owner?'מנהל מערכת':(ROLES[S.perm.role]&&ROLES[S.perm.role].label)||'משתמש'):'';
+  $('#me').textContent=S.perm?((S.soldiers[S.uid]&&S.soldiers[S.uid].name||S.meName||'אני')+' · '+r):'';
+  $('#btnStamp').hidden=!can('stamp');
+  $('#btnBackup').hidden=!can('exportData');
+}
+function renderKpis(){
+  var ids=Object.keys(S.soldiers), arr=ids.filter(function(i){return statusOf(i)==='ARRIVED'}).length;
+  var pct=ids.length?' <small>('+Math.round(arr/ids.length*100)+'%)</small>':'';
+  var k=[['חיילים בגדוד',ids.length,''],['התייצבו',arr+pct,'ok']];
+  $('#kpis').innerHTML=k.map(function(x){return '<div class="kpi '+x[2]+'"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>'}).join('');
+}
+function tabsList(){
+  var t=[['soldiers','סגל וחיילים ('+Object.keys(S.soldiers).length+')']];
+  if(S.owner||can('manageInventory')||can('stamp')||can('viewInventory'))t.push(['inventory','קטלוג ומלאי'+(Object.keys(S.inventory).some(function(k){return isLow(S.inventory[k])})?' ⚠':'')]);
+  if(S.owner||can('manageInventory')||(can('stamp')&&allowedDomains().indexOf('נשקייה')>=0))t.push(['weapons','מאגר נשקים ('+(Object.keys(S.weapons).length)+')'+(wpAnyIssues()?' ⚠':'')]);
+  if(can('viewForms'))t.push(['forms','טפסי חתימה']);
+  if(can('viewLog'))t.push(['log','יומן תנועות']);
+  if(S.owner)t.push(['users','משתמשים והגדרות']);
+  return t;
+}
+function renderTabs(){
+  var t=tabsList();
+  if(!t.some(function(x){return x[0]===S.tab}))S.tab='soldiers';
+  var SH={soldiers:'סגל',inventory:'מלאי',weapons:'נשקים',forms:'טפסים',log:'יומן',users:'ניהול'};
+  $('#tabs').innerHTML=t.map(function(x){return '<button class="tab" role="tab" aria-selected="'+(S.tab===x[0])+'" data-act="tab" data-v="'+x[0]+'"><span class="ic" aria-hidden="true"></span><span class="tl">'+esc(x[1])+'</span><span class="ts">'+esc((SH[x[0]]||x[1])+(x[1].indexOf('⚠')>=0?' ⚠':''))+'</span></button>'}).join('');
+}
+function renderAll(){
+  renderHeader(); renderKpis();
+  if(!S.perm){
+    $('#tabs').innerHTML='';
+    $('#view').innerHTML='<div class="panel"><h3>'+(window.FB_MODE?'ההרשמה התקבלה, ממתין לאישור המנהל':'אין לך הרשאה למערכת עדיין')+'</h3><p class="note">המנהל צריך לאשר אותך ולהגדיר את התפקיד שלך. אחרי האישור רענן את הדף.</p></div>';
+    return;
+  }
+  renderTabs(); renderView();
+}
+function liveRender(){
+  if(!S.booted)return;
+  var a=document.activeElement, l=$('#list');
+  renderKpis(); renderTabs();
+  if(l&&a&&l.contains(a)&&/^(SELECT|INPUT|TEXTAREA)$/.test(a.tagName)){S.dirty=true;return}
+  renderList();
+}
+function renderView(){
+  var v=$('#view');
+  if(S.tab==='soldiers'){
+    v.innerHTML='<div class="list" style="gap:12px"><div class="bar">'+
+      '<input id="q" type="search" data-inp="q" placeholder="חיפוש לפי שם, מ״א, ת״ז או טלפון" value="'+esc(S.q)+'" aria-label="חיפוש חייל">'+
+      '<select id="co" data-chg="co" aria-label="פלוגה"><option value="ALL">כל הפלוגות</option>'+allCompanies().map(function(c){return '<option value="'+esc(c)+'"'+(S.co===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'<option value="ATTACHED"'+(S.co==='ATTACHED'?' selected':'')+'>מסופחים (כולם)</option></select>'+
+      '<select id="st" data-chg="st" aria-label="סטטוס"><option value="ALL">כל הסטטוסים</option>'+Object.keys(STATUS).map(function(k){return '<option value="'+k+'"'+(S.st===k?' selected':'')+'>'+STATUS[k].t+'</option>'}).join('')+'<option value="ATTACHED"'+(S.st==='ATTACHED'?' selected':'')+'>בסיפוח</option><option value="STUCK"'+(S.st==='STUCK'?' selected':'')+'>שוחררו ועדיין חתומים</option></select>'+
+      expBtn('exportSoldiers')+(can('manageSoldiers')?'<button class="btn" data-act="addSoldier">הוספת חייל</button>':'')+
+      '</div><div id="list"></div></div>';
+  }else if(S.tab==='inventory'){
+    v.innerHTML='<div class="list" style="gap:12px"><div class="bar"><div class="seg">'+
+      [['ALL','כל המלאי'],['אפסנאות','אפסנאות'],['נשקייה','נשקייה'],['COMPANY','החתמות פלוגתיות']].map(function(x){return '<button data-act="invDom" data-v="'+x[0]+'" aria-pressed="'+(S.invDom===x[0])+'">'+x[1]+'</button>'}).join('')+'</div>'+
+      (S.invDom==='COMPANY'?'':groupSelect()+'<input id="iq" type="search" data-inp="iq" placeholder="חיפוש לפי שם פריט או קטגוריה" value="'+esc(S.invQ)+'" aria-label="חיפוש פריט">')+
+      expBtn('exportInventory')+(can('manageInventory')&&S.invDom!=='COMPANY'?'<button class="btn ghost" data-act="manageGroups">ניהול קבוצות</button><button class="btn ghost" data-act="manageSets">ניהול סטים</button><button class="btn ghost" data-act="manageWeapons">ניהול נשקים</button><button class="btn" data-act="addItem">פריט חדש</button>':'')+
+      '</div><div id="list"></div></div>';
+  }else if(S.tab==='weapons'){
+    v.innerHTML='<div class="list" style="gap:12px"><div class="bar"><input id="wpq" type="search" data-inp="wpq" placeholder="חיפוש לפי צ&#39;, מספר נשק או שם חייל" value="'+esc(S.wpQ)+'" aria-label="חיפוש נשק">'+
+      '<select data-chg="wpItem" aria-label="סוג נשק"><option value="ALL">כל סוגי הנשק</option>'+weaponItems().map(function(i){return '<option value="'+esc(i.id)+'"'+(S.wpItem===i.id?' selected':'')+'>'+esc(i.name)+'</option>'}).join('')+'</select>'+
+      '<select data-chg="wpSt" aria-label="מצב">'+[['ALL','כל המצבים'],['STOCK','במחסן'],['OUT','חתומים על חייל'],['ASSIGNED','משויכים לחייל'],['APSON','מאופסנים'],['FREE','לא משויכים']].map(function(x){return '<option value="'+x[0]+'"'+(S.wpSt===x[0]?' selected':'')+'>'+x[1]+'</option>'}).join('')+'</select>'+
+      expBtn('exportWeapons')+(can('manageInventory')?'<button class="btn" data-act="manageWeapons">ניהול נשקים</button>':'')+
+      '</div><div id="list"></div></div>';
+  }else if(S.tab==='forms'){
+    v.innerHTML='<div class="list" style="gap:12px"><div class="bar"><input id="fq" type="search" data-inp="fq" placeholder="חיפוש לפי חייל, מ״א, פריט, צ&#39; או מחתים" value="'+esc(S.fq)+'" aria-label="חיפוש טפסי חתימה"><select data-chg="fco" aria-label="פלוגה"><option value="ALL">כל הפלוגות</option>'+allCompanies().map(function(c){return '<option value="'+esc(c)+'"'+(S.fco===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select>'+expBtn('exportForms')+'</div><div id="list"></div></div>';
+  }else if(S.tab==='log'){
+    v.innerHTML='<div class="list" style="gap:12px"><div class="bar"><input id="lq" type="search" data-inp="lq" placeholder="חיפוש לפי חייל או פריט" value="'+esc(S.logQ)+'" aria-label="חיפוש ביומן">'+expBtn('exportLog')+'</div><div id="list"></div></div>';
+  }else{
+    v.innerHTML='<div id="list" class="list" style="gap:12px"></div>';
+  }
+  renderList();
+}
+function renderList(){
+  S.dirty=false;
+  var l=$('#list'); if(!l||!S.perm)return;
+  if(S.tab==='soldiers')l.innerHTML=soldiersHtml();
+  else if(S.tab==='inventory')l.innerHTML=S.invDom==='COMPANY'?companyHtml():inventoryHtml();
+  else if(S.tab==='weapons')l.innerHTML=weaponsHtml();
+  else if(S.tab==='log')l.innerHTML=logHtml();
+  else if(S.tab==='forms')l.innerHTML=formsHtml();
+  else if(S.tab==='company')l.innerHTML=companyHtml();
+  else if(S.tab==='users'&&S.owner)l.innerHTML=usersHtml();
+}
+
+/* ---------- soldiers ---------- */
+function filteredSoldiers(){
+  var q=S.q.trim().toLowerCase();
+  return Object.keys(S.soldiers).map(function(k){return S.soldiers[k]}).filter(function(s){
+    if(S.co==='ATTACHED'){if(!isAttached(s.id))return false}else if(S.co!=='ALL'&&s.company!==S.co)return false;
+    if(S.st==='ATTACHED'){if(!isAttached(s.id))return false}else if(S.st==='STUCK'){if(statusOf(s.id)!=='RELEASED'||!holdsAny(s.id))return false}else if(S.st!=='ALL'&&statusOf(s.id)!==S.st)return false;
+    if(!q)return true;
+    return [s.name,s.id,s.idNumber,s.zehuNumber,s.phone].some(function(v){return String(v||'').toLowerCase().indexOf(q)>=0});
+  }).sort(function(a,b){return (a.company||'').localeCompare(b.company||'','he')||(a.name||'').localeCompare(b.name||'','he')});
+}
+function coStrip(){
+  return '<div class="costrip">'+allCompanies().map(function(c){
+    var ids=Object.keys(S.soldiers).filter(function(k){return S.soldiers[k].company===c});
+    var a=ids.filter(function(k){return statusOf(k)==='ARRIVED'}).length;
+    var p=ids.length?Math.round(a/ids.length*100):0;
+    return '<button class="co'+(S.co===c?' on':'')+'" data-act="coFilter" data-v="'+esc(c)+'"><span>'+esc(c)+'</span><b>'+a+'/'+ids.length+'</b><i style="--p:'+p+'%"></i></button>';
+  }).join('')+(function(){var n=Object.keys(S.soldiers).filter(isAttached).length;return '<button class="co'+(S.co==='ATTACHED'?' on':'')+'" data-act="coFilter" data-v="ATTACHED"><span>מסופחים</span><b>'+n+'</b></button>'})()+'</div>';
+}
+function soldiersHtml(){
+  var all=Object.keys(S.soldiers).length;
+  if(!all)return coStrip()+'<p class="empty" style="margin-top:12px">אין חיילים במערכת עדיין.'+(can('manageSoldiers')?' הוסף את החייל הראשון עם הכפתור למעלה.':'')+'</p>';
+  var rows=filteredSoldiers(), ids=[], html='', last=null;
+  rows.forEach(function(s){
+    ids.push(s.id);
+    if((S.co==='ALL'||S.co==='ATTACHED')&&s.company!==last){last=s.company;html+='<h3 class="grp">'+esc(s.company||'ללא פלוגה')+'</h3>'}
+    html+=soldierRow(s);
+  });
+  Object.keys(S.status).forEach(function(k){ids.push(S.status[k].by)});
+  resolveNames(ids);
+  return stuckBanner()+coStrip()+(rows.length?'<div class="list">'+html+'</div>':'<p class="empty" style="margin-top:12px">לא נמצאו חיילים לפי הסינון.</p>');
+}
+function soldierRow(s){
+  var st=statusOf(s.id), by=S.status[s.id]&&S.status[s.id].by;
+  var stHtml=can('status')
+    ?'<select class="pill '+STATUS[st].c+'" data-chg="status" data-id="'+esc(s.id)+'" aria-label="סטטוס שלישות">'+Object.keys(STATUS).map(function(k){return '<option value="'+k+'"'+(k===st?' selected':'')+'>'+STATUS[k].t+'</option>'}).join('')+'</select><label class="att"><input type="checkbox" data-chg="attached" data-id="'+esc(s.id)+'"'+(isAttached(s.id)?' checked':'')+'> בסיפוח</label>'
+    :statusTag(s.id);
+  return '<article class="row s3"><div class="who"><b>'+esc(s.name)+'</b>'+
+    '<div class="meta"><span class="mono">מ״א '+esc(s.id)+'</span>'+(s.idNumber?'<span class="mono">ת״ז '+esc(s.idNumber)+'</span>':'')+(s.zehuNumber?'<span class="mono">זהו '+esc(s.zehuNumber)+'</span>':'')+'<span>'+esc(s.company||'')+(s.squad?' · '+esc(s.squad):'')+'</span>'+(s.phone?'<span class="mono" dir="ltr">'+esc(s.phone)+'</span>':'')+'</div></div>'+
+    '<div>'+stHtml+(by?'<small class="muted">עודכן ע״י '+esc(nameOf(by))+'</small>':'')+'</div>'+
+    '<div class="acts">'+(can('viewSoldierFile')?'<button class="btn ghost sm" data-act="profile" data-id="'+esc(s.id)+'">תיק החתמה</button>':'')+(can('manageSoldiers')?'<button class="btn ghost sm" data-act="editSoldier" data-id="'+esc(s.id)+'">עריכה</button>':'')+'</div></article>';
+}
+
+/* ---------- inventory ---------- */
+function inventoryHtml(){
+  var q=S.invQ.trim();
+  if(S.invGroup!=='ALL'&&S.invGroup!=='NONE'&&allGroups().indexOf(S.invGroup)<0)S.invGroup='ALL';
+  var items=Object.keys(S.inventory).map(function(k){return S.inventory[k]}).filter(function(i){
+    return (S.invDom==='ALL'||i.domain===S.invDom)&&(S.invGroup==='ALL'||(S.invGroup==='NONE'?!i.group:i.group===S.invGroup))&&(!q||String(i.name).indexOf(q)>=0||String(i.category||'').indexOf(q)>=0);
+  }).sort(function(a,b){return String(a.id).localeCompare(String(b.id))});
+  S._invItems=items;
+  if(!Object.keys(S.inventory).length)return '<p class="empty">הקטלוג ריק.'+(can('manageInventory')?' הוסף פריט ראשון עם הכפתור למעלה.':'')+'</p>';
+  if(!items.length)return '<p class="empty">לא נמצאו פריטים.</p>';
+  var cardOf=function(i){
+    var iss=issuedOf(i.id), av=availOf(i.id), p=Math.min(100,Math.round(iss/(i.total||1)*100));
+    return '<article class="item" data-act="breakdown" data-id="'+esc(i.id)+'" tabindex="0" role="button">'+
+      '<div><span class="tag '+(i.domain==='נשקייה'?'crit':'warn')+'">'+esc(i.domain)+'</span> <span class="muted" style="font-size:12px">'+esc(i.category||'')+(i.group?' · '+esc(i.group):'')+'</span><h3>'+esc(i.name)+'</h3><span class="mono muted">'+esc(i.id)+'</span></div>'+
+      '<div class="nums"><div><span>מלאי כולל</span><b>'+i.total+'</b></div><div><span>מוחתם</span><b>'+iss+'</b></div><div><span>זמין</span><b>'+av+'</b></div>'+(isTracked(i)?'<div><span>מאופסן</span><b>'+wpList(i.id).filter(function(w){return w.apson&&wpOwner(w)}).length+'</b></div>':'')+'</div>'+
+      (isTracked(i)?wpIssuesHtml(i,true):'')+(isLow(i)?'<div class="warnline">מלאי נמוך: זמין '+av+' (סף התראה '+esc(i.lowStock)+')</div>':'')+
+      '<div class="meter"><i style="--p:'+p+'%"></i></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px" class="muted"><span>מוחתם '+p+'%</span><span>פילוח לפי פלוגות ←</span>'+
+      (can('manageInventory')?'<button class="btn ghost sm" data-act="editItem" data-id="'+esc(i.id)+'">עריכה</button>':'')+'</div></article>';
+  };
+  var gs=allGroups();
+  if(!gs.length||S.invGroup!=='ALL')return '<div class="cards">'+items.map(function(i){return cardOf(i)}).join('')+'</div>';
+  var by={};
+  items.forEach(function(i){var g=gs.indexOf(i.group)>=0?i.group:'';(by[g]=by[g]||[]).push(i)});
+  return gs.concat(['']).filter(function(g){return by[g]}).map(function(g){
+    return '<h3 class="grp">'+esc(g||'ללא קבוצה')+(g&&groupDomain(g)&&S.invDom==='ALL'?' · '+esc(groupDomain(g)):'')+' ('+by[g].length+')</h3><div class="cards">'+by[g].map(function(i){return cardOf(i)}).join('')+'</div>';
+  }).join('');
+}
+
+/* ---------- log ---------- */
+function companyOfRc(rc){return rc.soldierCompany||(S.soldiers[rc.soldierId]&&S.soldiers[rc.soldierId].company)||''}
+function formsList(){
+  var q=S.fq.trim().toLowerCase();
+  return Object.keys(S.receipts).map(function(k){return S.receipts[k]}).filter(function(rc){
+    if(S.fco!=='ALL'&&companyOfRc(rc)!==S.fco)return false;
+    if(!q)return true;
+    var hay=[rc.soldierName,rc.soldierId,rc.signerName,(rc.lines||[]).map(function(l){return l.name+' '+(l.serial||'')+' '+(l.weaponNo||'')}).join(' ')].join(' ').toLowerCase();
+    return hay.indexOf(q)>=0;
+  }).sort(function(a,b){return companyOfRc(a).localeCompare(companyOfRc(b),'he')||String(b.ts).localeCompare(String(a.ts))});
+}
+function formsHtml(){
+  if(!S.loaded.receipts)return '<p class="empty">טוען טפסים…</p>';
+  var arr=formsList(); S._formsArr=arr;
+  if(!Object.keys(S.receipts).length)return '<p class="empty">אין עדיין טפסי חתימה. טופס נוצר אחרי כל החתמה של חייל.</p>';
+  if(!arr.length)return '<p class="empty">לא נמצאו טפסים לחיפוש הזה.</p>';
+  var html='', last=null, shown=arr.slice(0,300);
+  shown.forEach(function(rc){
+    var c=companyOfRc(rc)||'ללא פלוגה';
+    if(c!==last){last=c;var n=arr.filter(function(x){return (companyOfRc(x)||'ללא פלוגה')===c}).length;html+='<h3 class="grp">'+esc(c)+' ('+n+')</h3>'}
+    var items=(rc.lines||[]).map(function(l){return l.name+(l.qty>1?' ×'+l.qty:'')}).join(', ');
+    html+='<article class="row s3"><div class="who"><b>'+esc(rc.soldierName||rc.soldierId)+'</b><div class="meta"><span class="mono">מ״א '+esc(rc.soldierId)+'</span><span>'+esc(fmt(rc.ts))+'</span><span>מחתים: '+esc(rc.signerName||'-')+'</span></div><div class="muted" style="font-size:12px">'+esc(items.length>110?items.slice(0,110)+'…':items)+'</div></div>'+
+      '<div><span class="pill '+(rc.type==='issue'?'warn':'info')+'">'+(rc.type==='issue'?'החתמה':'זיכוי')+'</span> '+(rc.signature?'<span class="pill ok">חתום</span>':'<span class="pill crit">ללא חתימה</span>')+'</div>'+
+      '<div class="acts"><button class="btn ghost sm" data-act="rcOpen" data-id="'+esc(rc.id)+'">פתיחת טופס</button></div></article>';
+  });
+  return '<p class="note">'+arr.length+' טפסים'+(arr.length>300?' (מוצגים 300 הראשונים, צמצם בחיפוש)':'')+'</p><div class="list">'+html+'</div>';
+}
+function logHtml(){
+  var q=S.logQ.trim().toLowerCase();
+  var arr=Object.keys(S.transactions).map(function(k){return S.transactions[k]}).sort(function(a,b){return String(b.ts).localeCompare(String(a.ts))});
+  if(!arr.length)return '<p class="empty">אין עדיין תנועות. החתמה או זיכוי ראשונים יופיעו כאן עם שם המבצע והשעה.</p>';
+  if(q)arr=arr.filter(function(t){
+    var s=S.soldiers[t.soldierId], i=S.inventory[t.itemId];
+    return ((s&&s.name)||'').toLowerCase().indexOf(q)>=0||String(t.soldierId||'').indexOf(q)>=0||String(t.company||'').toLowerCase().indexOf(q)>=0||String(t.itemName||'').toLowerCase().indexOf(q)>=0||((i&&i.name)||'').toLowerCase().indexOf(q)>=0||String(t.signerName||'').toLowerCase().indexOf(q)>=0||String(t.serial||'').toLowerCase().indexOf(q)>=0||String(t.weaponNo||'').toLowerCase().indexOf(q)>=0;
+  });
+  S._logArr=arr;
+  var shown=arr.slice(0,300);
+  resolveNames(shown.map(function(t){return t.by}));
+  return '<p class="note">'+arr.length+' תנועות'+(arr.length>shown.length?' (מוצגות 300 אחרונות)':'')+'</p><div class="list">'+shown.map(function(t){
+    var s=S.soldiers[t.soldierId], i=S.inventory[t.itemId], iss=t.type==='issue';
+    return '<article class="row log"><time>'+esc(fmt(t.ts))+'</time><span class="pill '+(iss?'warn':'info')+'">'+(iss?'החתמה':'זיכוי')+'</span>'+
+      (t.scope==='company'?'<div class="who"><b>'+esc(t.company)+'</b><div class="meta"><span>החתמה פלוגתית'+(t.receiverName?' · נציג: '+esc(t.receiverName):'')+'</span></div></div>':'<div class="who"><b>'+esc(s?s.name:t.soldierId)+'</b><div class="meta"><span class="mono">'+esc(t.soldierId)+'</span></div></div>')+
+      '<div>'+esc(i?i.name:(t.itemName?t.itemName+(t.itemId?' (הוסר מהקטלוג)':' (מחוץ לקטלוג)'):t.itemId))+' <b>× '+esc(t.quantity)+'</b>'+((t.serial||t.weaponNo)?'<div class="mono" style="font-size:12px">'+(t.serial?"צ' "+esc(t.serial):'')+(t.serial&&t.weaponNo?' · ':'')+esc(t.weaponNo||'')+'</div>':'')+'</div>'+
+      '<div class="muted" style="font-size:12px">'+(iss?'מחתים: ':'מזכה: ')+esc(t.signerName||nameOf(t.by))+(t.notes?' · '+esc(t.notes):'')+(t.editedAt?' · <b>נערך</b>':'')+(t.receiptId?'<div style="margin-top:4px"><button type="button" class="btn ghost sm" data-act="rcOpen" data-id="'+esc(t.receiptId)+'">טופס חתימה</button></div>':'')+(canEditTx(t)?'<div style="margin-top:4px"><button type="button" class="btn ghost sm" data-act="txEdit" data-id="'+esc(t.id)+'">עריכה</button></div>':'')+'</div></article>';
+  }).join('')+'</div>';
+}
+
+/* ---------- users & settings (owner) ---------- */
+function roleOpts(sel){return Object.keys(ROLES).map(function(k){return '<option value="'+k+'"'+(k===sel?' selected':'')+'>'+ROLES[k].label+'</option>'}).join('')}
+function userCard(id,r){
+  var sd=S.soldiers[id], miss=(window.FB_MODE&&sd&&(!sd.idNumber||!sd.phone))?'<div class="warnline">בכרטיס החייל חסר '+(!sd.idNumber?'ת״ז':'')+(!sd.idNumber&&!sd.phone?' ו':'')+(!sd.phone?'טלפון':'')+'. בלי זה הוא לא יוכל לאמת זהות ולהיכנס.</div>':'';
+  var emIn=(window.FB_MODE&&sd&&!r.uid&&id!==S.uid)?'<div class="warnline">ממתין שהחייל יירשם. ההרשאות יופעלו רק אחרי שתאשר את הרשמתו.</div>':'';
+  return '<article class="ucard" data-uid="'+esc(id)+'"><div class="uhead"><b>'+esc(nameOf(id))+'</b>'+
+    '<select data-chg="roleSel" aria-label="תפקיד">'+roleOpts(r.role)+'</select></div>'+miss+emIn+
+    '<div class="checks">'+PERM_KEYS.map(function(k){return '<label><input type="checkbox" data-k="'+k+'"'+(r.perms&&r.perms[k]?' checked':'')+'> '+PERM_LABELS[k]+'</label>'}).join('')+'</div>'+
+    '<div class="checks"><span class="muted">תחומי החתמה:</span>'+DOMAINS.map(function(d){return '<label><input type="checkbox" data-d="'+d+'"'+((r.domains||[]).indexOf(d)>=0?' checked':'')+'> '+d+'</label>'}).join('')+'</div>'+
+    '<div class="acts"><button class="btn sm" data-act="saveUser" data-id="'+esc(id)+'">שמירה</button><button class="btn danger sm" data-act="removeUser" data-id="'+esc(id)+'">הסרה</button></div></article>';
+}
+function pendingRegsHtml(){
+  if(!window.FB_MODE)return '';
+  var arr=Object.keys(S.links).map(function(k){return S.links[k]}).filter(function(l){
+    var r=S.roles[l.soldierId]; return !(r&&r.uid===l.id);
+  });
+  if(!arr.length)return '';
+  return '<section class="panel"><h3>ממתינים לאישור ('+arr.length+')</h3><p class="note">אלה חיילים מהמאגר שנרשמו. אשר רק אם המייל שמופיע שייך לאדם הנכון.</p>'+arr.map(function(l){
+    var s=S.soldiers[l.soldierId]||{};
+    return '<article class="ucard"><div class="uhead"><b>'+esc(s.name||l.soldierId)+'</b><span class="muted">מ״א '+esc(l.soldierId)+(s.company?' · '+esc(s.company):'')+'</span></div><div class="muted" dir="ltr" style="text-align:right">'+esc(l.email||'')+'</div>'+
+      (S.roles[l.soldierId]?'<div class="warnline">כבר קיים חשבון מאושר לחייל הזה. אישור יחליף אותו.</div>':'')+
+      '<div class="acts"><button class="btn sm" data-act="approveReg" data-id="'+esc(l.id)+'" data-sid="'+esc(l.soldierId)+'">אישור</button><button class="btn danger sm" data-act="rejectReg" data-id="'+esc(l.id)+'">דחייה</button></div></article>';
+  }).join('')+'</section>';
+}
+function usersHtml(){
+  var ids=Object.keys(S.roles); resolveNames(ids);
+  return '<section class="panel"><h3>מנהל המערכת</h3><p class="note">'+esc(S.meName||'אתה')+' (בעלים של הדף). לבעלים יש את כל ההרשאות, ורק הוא מוסיף משתמשים ומגדיר להם הרשאות.</p></section>'+
+    '<section class="panel"><h3>הוספת משתמש</h3><input id="uSearch" type="search" data-inp="uSearch" placeholder="חיפוש לפי שם" autocomplete="off" aria-label="חיפוש משתמש"><div id="uRes"></div></section>'+
+    '<section class="panel"><h3>משתמשים והרשאות ('+ids.length+')</h3>'+(ids.length?ids.map(function(i){return userCard(i,S.roles[i])}).join(''):'<p class="empty">עדיין לא הוספת משתמשים. חפש שם למעלה, בחר תפקיד והתאם הרשאות.</p>')+
+    '<p class="note">בחירת תפקיד ממלאת הרשאות מוכנות, ואפשר לשנות כל אחת לפני השמירה.</p></section>'+
+    '<section class="panel"><h3>פלוגות</h3><div class="chips">'+companies().map(function(c){return '<span class="chip">'+esc(c)+'<button data-act="delCompany" data-v="'+esc(c)+'" aria-label="הסרת '+esc(c)+'">✕</button></span>'}).join('')+'</div>'+
+    '<div class="bar"><input id="newCo" placeholder="שם פלוגה חדשה" aria-label="שם פלוגה חדשה"><button class="btn ghost sm" data-act="addCompany">הוספה</button></div></section>'+
+    pendingRegsHtml()+(window.FB_MODE?'<p class="note">כניסה למערכת: כולם נכנסים עם Google ונרשמים בכניסה הראשונה. ההרשמה מותרת רק למי שהמספר האישי, ת״ז והטלפון שלו תואמים לכרטיס חייל במאגר. אחרי ההרשמה הוא מופיע למעלה תחת "ממתינים לאישור", ורק אחרי שתאשר ותגדיר לו הרשאות הוא נכנס. ודא שבכרטיס החייל יש ת״ז וטלפון נכונים.</p>':'')+'<p class="note"'+(window.FB_MODE?' hidden':'')+'>איך זה נאכף: ההרשאות כאן קובעות מה כל אדם רואה ועושה באפליקציה. כדי שמישהו יוכל לשמור נתונים, שתף איתו את הדף ברמת משתתף. הוספת חיילים וניהול הקטלוג דורשים רמת עורך. מי שמשותף איתו ברמת צפייה בלבד לא רואה נתונים.</p>';
+}
+
+/* ---------- stamping modal ---------- */
+function soldierMatches(q){
+  var toks=String(q||'').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if(!toks.length)return [];
+  return Object.keys(S.soldiers).map(function(k){return S.soldiers[k]}).filter(function(s){
+    var blob=[s.name,s.id,s.idNumber,s.zehuNumber,s.phone].join(' ').toLowerCase()+' '+String(s.phone||'').replace(/\D/g,'');
+    return toks.every(function(t){return blob.indexOf(t)>=0});
+  }).sort(function(a,b){return (a.name||'').localeCompare(b.name||'','he')});
+}
+function soldierSug(){
+  var q=(M.sq||'').trim();
+  if(!q)return '<p class="note" style="padding:6px 2px">הקלד שם, מספר אישי, ת״ז, מספר זהו או טלפון.</p>';
+  var all=soldierMatches(q), arr=all.slice(0,8);
+  if(!arr.length)return '<p class="note" style="padding:6px 2px">לא נמצא חייל שמתאים ל"'+esc(q)+'".</p>';
+  if(!(M.hi>=0))M.hi=0;
+  if(M.hi>=arr.length)M.hi=arr.length-1;
+  return '<div class="sugs" role="listbox">'+arr.map(function(s,n){
+    return '<button type="button" class="sug'+(n===M.hi?' on':'')+'" role="option" data-act="mPickSoldier" data-id="'+esc(s.id)+'"><b>'+esc(s.name)+'</b><span class="meta"><span class="mono">'+esc(s.id)+'</span><span>'+esc(s.company||'')+(s.squad?' · '+esc(s.squad):'')+'</span></span><span>'+statusTag(s.id)+'</span></button>';
+  }).join('')+'</div>'+(all.length>arr.length?'<p class="note" style="padding:6px 2px">עוד '+(all.length-arr.length)+' תוצאות. המשך להקליד כדי לצמצם.</p>':'');
+}
+function soldierArea(){
+  var s=M.soldierId&&S.soldiers[M.soldierId];
+  if(s){
+    var msg=(M.type==='issue')?stampBlock(s.id):'';
+    return '<div class="chosen"><div class="who"><b>'+esc(s.name)+'</b><div class="meta"><span class="mono">'+esc(s.id)+'</span><span>'+esc(s.company||'')+(s.squad?' · '+esc(s.squad):'')+'</span></div><div style="margin-top:6px">'+statusTag(s.id)+'</div></div><button type="button" class="btn ghost sm" data-act="mClearSoldier">החלפת חייל</button></div>'+
+      (msg?'<div class="banner" role="alert" style="margin-top:8px">'+esc(msg)+'</div>':'');
+  }
+  return '<input id="sSearch" type="search" data-inp="sSearch" placeholder="חיפוש חייל: שם, מ״א, ת״ז או טלפון" value="'+esc(M.sq||'')+'" autocomplete="off" aria-label="חיפוש חייל" style="width:100%"><div id="sSug">'+soldierSug()+'</div>';
+}
+function allowedDomains(){return DOMAINS.filter(function(d){return S.perm.owner||S.perm.domains.indexOf(d)>=0})}
+function selCount(map,dom){return Object.keys(map).filter(function(k){var it=S.inventory[k];return it&&it.domain===dom}).length}
+function domTabs(act,cur,map){
+  var ds=allowedDomains();
+  if(ds.length<2)return '';
+  return '<div class="seg">'+ds.map(function(d){var n=selCount(map,d);return '<button type="button" data-act="'+act+'" data-v="'+esc(d)+'" aria-pressed="'+(d===cur)+'">'+esc(d)+(n?' ('+n+')':'')+'</button>'}).join('')+'</div>';
+}
+function allowedItems(){
+  return Object.keys(S.inventory).map(function(k){return S.inventory[k]}).filter(function(i){return S.perm.owner||S.perm.domains.indexOf(i.domain)>=0});
+}
+function plainRow(i,small){
+  var on=M.items[i.id]!==undefined;
+  return '<div class="pick"><label><input type="checkbox" data-chg="mToggle" data-id="'+esc(i.id)+'"'+(on?' checked':'')+'><span><b>'+esc(i.name)+'</b><small>'+small+'</small></span></label>'+
+    (on?'<input type="number" min="1" inputmode="numeric" class="qty" data-inp="mQty" data-id="'+esc(i.id)+'" value="'+esc(M.items[i.id])+'" aria-label="כמות">':'')+'</div>';
+}
+function unitSugHtml(id,i){
+  var u=(M.units[id]||[])[i]; if(!u)return '';
+  var q=(u.fq||'').trim(); if(!q)return '';
+  var l=wpList(id).filter(function(w){var o=wpExplicit(w);return !wpHolder(w)&&(!o||o===M.soldierId)&&hit(q,[w.serial,w.weaponNo])}).slice(0,6);
+  if(!l.length)return '<p class="note">לא נמצא נשק זמין. אפשר להקליד ידנית בשדות למטה.</p>';
+  return '<div class="sugs">'+l.map(function(w){return '<button type="button" class="sug" data-act="mUPick" data-id="'+esc(id)+'" data-i="'+i+'" data-wid="'+esc(w.id)+'"><b>'+esc(wpLabel(w))+'</b>'+(wpOwner(w)&&wpOwner(w)===M.soldierId?'<span class="pill info">משויך לחייל</span>':'')+'</button>'}).join('')+'</div>';
+}
+function unitEditor(id){
+  var us=M.units[id]||[];
+  return '<div class="units">'+us.map(function(u,n){
+    return '<div class="unit"><div class="unithead"><b>יחידה '+(n+1)+'</b>'+(us.length>1?'<button type="button" class="btn ghost sm" data-act="mUDel" data-id="'+esc(id)+'" data-i="'+n+'">הסרה</button>':'')+'</div>'+
+      (wpList(id).length?'<label class="f">חיפוש נשק במלאי<input type="search" data-inp="mUFind" data-id="'+esc(id)+'" data-i="'+n+'" value="'+esc(u.fq||'')+'" placeholder="הקלד צ&#39; או מספר נשק" autocomplete="off"></label><div id="uSug-'+esc(id)+'-'+n+'">'+unitSugHtml(id,n)+'</div>':'')+
+      '<label class="f">צ&#39; נשק<input data-inp="mUSerial" data-id="'+esc(id)+'" data-i="'+n+'" value="'+esc(u.serial)+'" maxlength="40" dir="ltr" autocomplete="off" placeholder="מספר צ&#39;"></label>'+
+      '<label class="f">מספר נשק<input data-inp="mUWno" data-id="'+esc(id)+'" data-i="'+n+'" value="'+esc(u.wno)+'" maxlength="60" autocomplete="off" placeholder="למשל: ערן נשק מספר 1"></label></div>';
+  }).join('')+'<button type="button" class="btn ghost sm" data-act="mUAdd" data-id="'+esc(id)+'">+ יחידה נוספת</button></div>';
+}
+function issueRow(i){
+  var small=esc(i.category||'')+' · זמין: '+availOf(i.id)+' · מוחתם: '+issuedOf(i.id);
+  if(!isTracked(i))return plainRow(i,small);
+  var on=M.units[i.id]!==undefined;
+  return '<div class="pick col"><label><input type="checkbox" data-chg="mToggle" data-id="'+esc(i.id)+'"'+(on?' checked':'')+'><span><b>'+esc(i.name)+'</b><small>'+small+'</small></span></label>'+(on?unitEditor(i.id):'')+'</div>';
+}
+function retRow(i,sid){
+  var held=heldCount(sid,i.id), base=esc(i.category||'');
+  if(!isTracked(i))return plainRow(i,base+' · חתום על החייל: '+held);
+  var nameHit=hit(M.iq,[i.name,i.category]);
+  var tr=unitsHeldBy(sid,i.id).filter(function(u){return nameHit||hit(M.iq,[u.serial,u.weaponNo])}), html='';
+  tr.forEach(function(u){
+    var on=!!(M.ret[i.id]&&M.ret[i.id][u.key]);
+    html+='<div class="pick"><label><input type="checkbox" data-chg="mRetToggle" data-id="'+esc(i.id)+'" data-key="'+esc(u.key)+'"'+(on?' checked':'')+'><span><b>'+esc(i.name)+'</b><small>'+(u.serial?'צ&#39; '+esc(u.serial):'')+(u.serial&&u.weaponNo?' · ':'')+(u.weaponNo?esc(u.weaponNo):'')+'</small></span></label></div>';
+  });
+  var untr=held-unitsHeldBy(sid,i.id).length;
+  if(untr>0&&nameHit)html+=plainRow(i,base+' · ללא מספר: '+untr);
+  return html;
+}
+function stampItems(){return assignedHint()+stampItemsList()}
+function stampItemsList(){
+  var sid=M.soldierId, items=allowedItems().filter(function(i){return i.domain===M.dom});
+  if(M.type==='return'){
+    if(!sid)return '<p class="empty" style="border:0">בחר חייל כדי לראות את הציוד החתום עליו.</p>';
+    items=items.filter(function(i){return heldCount(sid,i.id)>0});
+    if(!items.length)return '<p class="empty" style="border:0">אין לחייל ציוד חתום בתחום '+esc(M.dom)+'.</p>';
+  }
+  if(!items.length)return '<p class="empty" style="border:0">'+(M.dom?'אין פריטים בתחום '+esc(M.dom)+'.':'אין לך הרשאה להחתים באף תחום.')+'</p>';
+  items=items.filter(function(i){
+    if(hit(M.iq,[i.name,i.category]))return true;
+    if(!isTracked(i))return false;
+    if(M.type==='return')return unitsHeldBy(sid,i.id).some(function(u){return hit(M.iq,[u.serial,u.weaponNo])});
+    return wpList(i.id).some(function(w){return hit(M.iq,[w.serial,w.weaponNo])});
+  });
+  if(!items.length)return '<p class="empty" style="border:0">לא נמצאו פריטים לחיפוש.</p>';
+  return items.sort(function(a,b){return (a.name||'').localeCompare(b.name||'','he')}).map(function(i){return M.type==='return'?retRow(i,sid):issueRow(i)}).join('');
+}
+function mIqPlaceholder(){return M.dom?'חיפוש ב'+M.dom+': שם פריט, קטגוריה'+(M.dom==='נשקייה'?' או צ&#39; נשק':''):'חיפוש פריט'}
+function mSel(){return Object.assign({},M.items,M.units,M.ret)}
+function mGate(){
+  var b=$('#mGo'); if(!b)return;
+  b.disabled=!!(M.type==='issue'&&M.soldierId&&S.soldiers[M.soldierId]&&stampBlock(M.soldierId));
+}
+function mRefresh(){
+  var p=$('#pickList'); if(p)p.innerHTML=stampItems();
+  var t=$('#mTabs'); if(t)t.innerHTML=domTabs('mDom',M.dom,mSel());
+  mGate();
+}
+function setsBar(){
+  if(M.type!=='issue')return '';
+  var ids=setIds().filter(function(k){return Object.keys(S.sets[k].items||{}).length});
+  if(!ids.length)return '';
+  return '<div class="bar" style="margin-bottom:8px"><select id="mSet" aria-label="סט ציוד" style="flex:1 1 160px;min-width:0">'+ids.map(function(k){return '<option value="'+esc(k)+'">'+esc(S.sets[k].name)+'</option>'}).join('')+'</select><button type="button" class="btn ghost sm" data-act="mApplySet">הוספת הסט (רק מה שחסר)</button></div>';
+}
+function applySet(){
+  var sel=$('#mSet'); if(!sel)return;
+  var set=S.sets[sel.value]; if(!set)return;
+  var added=0, done=0, skipped=[];
+  Object.keys(set.items||{}).forEach(function(iid){
+    var it=S.inventory[iid], want=Number(set.items[iid])||0;
+    if(!it||want<1){skipped.push(it?it.name:'פריט שנמחק');return}
+    if(!S.perm.owner&&S.perm.domains.indexOf(it.domain)<0){skipped.push(it.name);return}
+    var need=M.soldierId?Math.max(0,want-heldCount(M.soldierId,iid)):want;
+    if(need<1){done++;return}
+    if(isTracked(it)){var cur=M.units[iid]||[];if(!cur.length)cur=newUnitRows(iid,need);while(cur.length<need)cur.push({serial:'',wno:''});M.units[iid]=cur}
+    else M.items[iid]=Math.max(Number(M.items[iid])||0,need);
+    added++;
+  });
+  mRefresh();
+  toast('נוספו '+added+' פריטים מהסט'+(done?' · '+done+' כבר אצל החייל':'')+(skipped.length?' · דולגו: '+skipped.join(', '):''));
+}
+function openStamp(sid){
+  M={type:'issue',soldierId:sid||'',items:{},units:{},ret:{},notes:'',sq:'',hi:0,iq:'',dom:allowedDomains()[0]||'',signer:lastSigner()||S.meName||''};
+  renderStamp();
+}
+function renderStamp(){
+  var iss=M.type==='issue';
+  modal(dlgHead('החתמה / זיכוי')+
+    '<div class="body"><div class="seg"><button type="button" data-act="mType" data-v="issue" aria-pressed="'+iss+'">החתמה (ציוד יוצא לחייל)</button><button type="button" data-act="mType" data-v="return" aria-pressed="'+!iss+'">זיכוי (ציוד חוזר למחסן)</button></div>'+
+    '<div><b style="font-size:13px">חייל</b><div id="sArea" style="margin-top:6px">'+soldierArea()+'</div></div>'+
+    '<div><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px"><b style="font-size:13px">פריטים ל'+(iss?'החתמה':'זיכוי')+'</b>'+(!iss?'<button type="button" class="btn ghost sm" data-act="mAll">סימון כל הציוד החתום בתחום</button>':'')+'</div>'+
+    setsBar()+
+    '<div id="mTabs">'+domTabs('mDom',M.dom,mSel())+'</div>'+
+    '<input id="mIq" type="search" data-inp="mIq" placeholder="'+esc(mIqPlaceholder())+'" value="'+esc(M.iq||'')+'" aria-label="חיפוש פריט" style="width:100%;margin:6px 0"><div class="picks" id="pickList">'+stampItems()+'</div></div>'+
+    '<label class="f">'+(iss?'שם המחתים *':'שם המזכה *')+'<input id="mSigner" data-inp="mSigner" maxlength="60" placeholder="שם מלא של מי שמבצע" value="'+esc(M.signer)+'"></label>'+
+    '<label class="f">הערות / מצב ציוד<input id="mNotes" data-inp="mNotes" maxlength="200" placeholder="למשל: כולל נרתיק, בלאי קל" value="'+esc(M.notes)+'"></label>'+
+    '<p class="err" id="err" role="alert"></p></div>'+
+    '<footer><button type="button" class="btn ghost" data-act="close">ביטול</button><button type="button" class="btn" id="mGo" data-act="mSubmit">'+(iss?'בצע החתמה':'בצע זיכוי')+'</button></footer>');
+  mGate();
+}
+function stampErr(m){var e=$('#err'); if(e)e.textContent=m}
+function lastSigner(){try{return localStorage.getItem('signer')||''}catch(e){return ''}}
+function rememberSigner(v){try{localStorage.setItem('signer',v)}catch(e){}}
+async function submitStamp(){
+  if(!M.soldierId||!S.soldiers[M.soldierId])return stampErr('בחר חייל');
+  if(!(M.signer||'').trim())return stampErr('נא למלא שם '+(M.type==='issue'?'המחתים':'המזכה'));
+  var issue=M.type==='issue', sid=M.soldierId;
+  if(issue){var blk=stampBlock(sid);if(blk)return stampErr(blk)}
+  var lines=[], ids=Object.keys(M.items), k;
+  for(k=0;k<ids.length;k++){
+    var id=ids[k], q=Number(M.items[id]), it=S.inventory[id];
+    if(!it)return stampErr('פריט לא נמצא בקטלוג');
+    if(!S.perm.owner&&S.perm.domains.indexOf(it.domain)<0)return stampErr('אין לך הרשאה להחתים בתחום '+it.domain);
+    if(!(q>=1)||Math.floor(q)!==q)return stampErr('כמות לא תקינה: '+it.name);
+    if(issue&&availOf(id)<q)return stampErr('אין מספיק מלאי ב"'+it.name+'". זמין: '+availOf(id));
+    if(!issue){
+      if(heldCount(sid,id)<q)return stampErr('לחייל חתומות רק '+heldCount(sid,id)+' יחידות מ"'+it.name+'"');
+      if(isTracked(it)){
+        var untr=heldCount(sid,id)-unitsHeldBy(sid,id).length;
+        if(untr<q)return stampErr('ב"'+it.name+'" חתומות על החייל '+Math.max(0,untr)+' יחידות ללא מספר. את היחידות עם מספר סמן ברשימה.');
+      }
+    }
+    lines.push({itemId:id,quantity:q});
+  }
+  if(issue){
+    var seen={}, uids=Object.keys(M.units);
+    for(k=0;k<uids.length;k++){
+      var uid=uids[k], uit=S.inventory[uid], rows=M.units[uid]||[];
+      if(!uit)return stampErr('פריט לא נמצא בקטלוג');
+      if(!S.perm.owner&&S.perm.domains.indexOf(uit.domain)<0)return stampErr('אין לך הרשאה להחתים בתחום '+uit.domain);
+      if(availOf(uid)<rows.length)return stampErr('אין מספיק מלאי ב"'+uit.name+'". זמין: '+availOf(uid));
+      for(var r=0;r<rows.length;r++){
+        var serial=nz(rows[r].serial), wno=nz(rows[r].wno);
+        var rf=wpFind(uid,serial,wno);
+        if(rf.err)return stampErr(rf.err);
+        if(!rf.w&&serial){
+          var oth=Object.keys(S.weapons).map(function(k){return S.weapons[k]}).filter(function(w){return w.itemId!==uid&&nz(w.serial).toLowerCase()===serial.toLowerCase()})[0];
+          if(oth)return stampErr("הצ' "+serial+' רשום במאגר בסוג נשק אחר ('+((S.inventory[oth.itemId]||{}).name||oth.itemId)+').');
+        }
+        if(rf.w){
+          var rown=wpExplicit(rf.w);if(rown&&rown!==sid){var asg=S.soldiers[rown];return stampErr('הנשק '+wpLabel(rf.w)+' משויך מראש ל'+(asg?asg.name:rown)+'. שנה את השיוך בניהול נשקים אם צריך.')}
+          serial=nz(rf.w.serial); wno=nz(rf.w.weaponNo);
+        }
+        var ks=serial?uid+'|s|'+serial.toLowerCase():'', kw=wno?uid+'|w|'+wno.toLowerCase():'';
+        if(ks&&seen[ks])return stampErr("צ' "+serial+' מופיע פעמיים בטופס');
+        if(kw&&seen[kw])return stampErr('מספר נשק "'+wno+'" מופיע פעמיים בטופס');
+        if(ks)seen[ks]=1;
+        if(kw)seen[kw]=1;
+        var cf=unitConflict(uid,serial,wno);
+        if(cf){
+          var hs=S.soldiers[cf.soldierId], bySerial=serial&&nz(cf.serial).toLowerCase()===serial.toLowerCase();
+          return stampErr((bySerial?"צ' "+serial:'מספר נשק "'+wno+'"')+' כבר חתום על '+(hs?hs.name:cf.soldierId)+'. צריך לזכות אותו קודם.');
+        }
+        lines.push({itemId:uid,quantity:1,serial:serial,weaponNo:wno});
+      }
+    }
+  }else{
+    var rids=Object.keys(M.ret), U=(S.idx&&S.idx.units)||{};
+    for(k=0;k<rids.length;k++){
+      var keys=Object.keys(M.ret[rids[k]]);
+      for(var m=0;m<keys.length;m++){
+        var u=U[keys[m]];
+        if(!u||u.soldierId!==sid)return stampErr('אחת היחידות כבר לא חתומה על החייל. סגור ופתח את הטופס מחדש.');
+        lines.push({itemId:rids[k],quantity:1,serial:u.serial,weaponNo:u.weaponNo});
+      }
+    }
+  }
+  if(!lines.length)return stampErr('סמן לפחות פריט אחד');
+  var btn=$('#mGo'); btn.disabled=true; stampErr('');
+  var done=0, rid='R-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  try{
+    for(var j=0;j<lines.length;j++){
+      var l=lines[j];
+      await S.db.collection('transactions').add({receiptId:rid,soldierId:sid,itemId:l.itemId,type:M.type,quantity:l.quantity,serial:l.serial||'',weaponNo:l.weaponNo||'',ts:new Date().toISOString(),by:S.uid,signerName:M.signer.trim().slice(0,60),itemName:(S.inventory[l.itemId]||{}).name||'',notes:(M.notes||'').slice(0,200)});
+      done++;
+    }
+    var t=M.type;
+    var sg={rid:rid,sid:sid,type:t,signer:M.signer.trim(),notes:M.notes||'',ts:new Date().toISOString(),lines:lines.map(function(l){return {name:(S.inventory[l.itemId]||{}).name||'',sku:(S.inventory[l.itemId]||{}).sku||'',qty:l.quantity,serial:l.serial||'',weaponNo:l.weaponNo||''}})};
+    rememberSigner(M.signer.trim()); closeModal();
+    if(t==='issue')openSign(sg); else toast('הזיכוי נשמר');
+  }catch(e){
+    btn.disabled=false;
+    stampErr(done?'חלק מהפריטים נשמרו ('+done+' מתוך '+lines.length+'). בדוק ביומן ונסה שוב לשאר.':'השמירה נכשלה. בדוק חיבור והרשאות ונסה שוב.');
+  }
+}
+/* ---------- company stamping ---------- */
+function ckey(name){return 'c:'+String(name||'').trim().toLowerCase()}
+function hit(q,arr){q=String(q||'').trim().toLowerCase();return !q||arr.some(function(v){return String(v||'').toLowerCase().indexOf(q)>=0})}
+function companyEntries(c){
+  var o=(S.idx.cheld&&S.idx.cheld[c])||{};
+  return Object.keys(o).map(function(k){
+    var e=o[k], it=e.itemId&&S.inventory[e.itemId];
+    return {key:k,itemId:e.itemId,count:e.count,name:it?it.name:e.name,custom:!e.itemId};
+  }).filter(function(e){return e.count>0}).sort(function(a,b){return String(a.name).localeCompare(String(b.name),'he')});
+}
+function companyHtml(){
+  var cs=allCompanies();
+  if(!cs.length)return '<p class="empty">לא הוגדרו פלוגות.</p>';
+  return cs.map(function(c){
+    var n=Object.keys(S.soldiers).filter(function(k){return S.soldiers[k].company===c}).length;
+    var es=companyEntries(c), tot=es.reduce(function(a,e){return a+e.count},0);
+    return '<section class="panel"><div class="uhead"><div><h3>'+esc(c)+'</h3><div class="meta"><span>'+n+' חיילים</span><span>'+tot+' פריטים חתומים על הפלוגה</span></div></div>'+
+      (can('stamp')?'<button class="btn sm" data-act="companyStamp" data-v="'+esc(c)+'">החתמה / זיכוי פלוגתי</button>':'')+'</div>'+
+      (es.length?'<div class="list">'+es.map(function(e){return '<div class="sr"><div><b>'+esc(e.name)+'</b>'+(e.custom?' <span class="tag warn">מחוץ לקטלוג</span>':'')+'</div><span class="pill warn">'+e.count+' יח׳</span></div>'}).join('')+'</div>':'<p class="note">אין ציוד חתום על הפלוגה כרגע.</p>')+'</section>';
+  }).join('');
+}
+function openCompanyStamp(c){
+  C={type:'issue',company:c||allCompanies()[0]||'',items:{},custom:[],dom:allowedDomains()[0]||'',iq:'',signer:lastSigner()||S.meName||'',receiver:'',notes:''};
+  renderCompanyStamp();
+}
+function savedCustoms(){
+  var o={};
+  Object.keys(S.transactions).forEach(function(k){var t=S.transactions[k];if(t.scope==='company'&&!t.itemId&&t.itemName)o[ckey(t.itemName)]=nz(t.itemName)});
+  return o;
+}
+function cSavedHtml(){
+  var sv=savedCustoms(), ks=Object.keys(sv).filter(function(k){return hit(C.iq,[sv[k]])}).sort(function(a,b){return sv[a].localeCompare(sv[b],'he')});
+  if(!ks.length)return '';
+  var ch=(S.idx.cheld&&S.idx.cheld[C.company])||{};
+  return '<div><b style="font-size:13px">פריטים חופשיים שנשמרו</b><div class="picks" style="margin-top:6px">'+ks.map(function(k){return cPickRow(k,sv[k],' <span class="tag warn">מחוץ לקטלוג</span>','חתום על הפלוגה: '+Math.max(0,(ch[k]&&ch[k].count)||0))}).join('')+'</div></div>';
+}
+function cOutside(){return companyEntries(C.company).filter(function(e){return !(e.itemId&&S.inventory[e.itemId])})}
+function cPickRow(key,name,tag,small){
+  var on=C.items[key]!==undefined;
+  return '<div class="pick"><label><input type="checkbox" data-chg="cToggle" data-key="'+esc(key)+'"'+(on?' checked':'')+'><span><b>'+esc(name)+tag+'</b><small>'+small+'</small></span></label>'+
+    (on?'<input type="number" min="1" inputmode="numeric" class="qty" data-inp="cQty" data-key="'+esc(key)+'" value="'+esc(C.items[key])+'" aria-label="כמות">':'')+'</div>';
+}
+function cPicks(){
+  if(C.type==='return'){
+    var es=companyEntries(C.company).filter(function(e){return e.itemId&&S.inventory[e.itemId]&&S.inventory[e.itemId].domain===C.dom});
+    if(!es.length)return '<p class="empty" style="border:0">אין ציוד חתום על הפלוגה בתחום '+esc(C.dom)+'.</p>';
+    es=es.filter(function(e){return hit(C.iq,[e.name,S.inventory[e.itemId].category])});
+    if(!es.length)return '<p class="empty" style="border:0">לא נמצאו פריטים לחיפוש.</p>';
+    return es.map(function(e){return cPickRow(e.key,e.name,'','חתום על הפלוגה: '+e.count)}).join('');
+  }
+  var items=allowedItems().filter(function(i){return i.domain===C.dom}).sort(function(a,b){return (a.name||'').localeCompare(b.name||'','he')});
+  if(!items.length)return '<p class="empty" style="border:0">אין פריטים בקטלוג בתחום '+esc(C.dom)+'. אפשר להוסיף פריט ידנית למטה.</p>';
+  items=items.filter(function(i){return hit(C.iq,[i.name,i.category])});
+  if(!items.length)return '<p class="empty" style="border:0">לא נמצאו פריטים בקטלוג לחיפוש. אפשר להוסיף פריט ידנית למטה.</p>';
+  return items.map(function(i){return cPickRow(i.id,i.name,'','זמין: '+availOf(i.id)+' · חתום על הפלוגה: '+companyHeld(C.company,i.id))}).join('');
+}
+function cCustomHtml(){
+  if(C.type==='return'){
+    var all=cOutside();
+    if(!all.length)return '';
+    var es=all.filter(function(e){return hit(C.iq,[e.name])});
+    return '<div><b style="font-size:13px">פריטים מחוץ לקטלוג</b><div class="picks" style="margin-top:6px">'+(es.length?es.map(function(e){return cPickRow(e.key,e.name,' <span class="tag warn">מחוץ לקטלוג</span>','חתום על הפלוגה: '+e.count)}).join(''):'<p class="empty" style="border:0">לא נמצאו פריטים לחיפוש.</p>')+'</div></div>';
+  }
+  return cSavedHtml()+'<div><b style="font-size:13px">פריט חדש שאינו בקטלוג</b><p class="note">הקלד שם פריט וכמות. הוא יירשם על הפלוגה, לא ישפיע על מלאי הקטלוג, והשם יישמר ברשימה למעלה להחתמות הבאות.</p><div class="list" style="margin-top:6px">'+
+    C.custom.map(function(r,i){return '<div class="crow"><input data-inp="cCName" data-i="'+i+'" value="'+esc(r.name)+'" placeholder="שם הפריט" aria-label="שם פריט"><input type="number" min="1" inputmode="numeric" data-inp="cCQty" data-i="'+i+'" value="'+esc(r.qty)+'" aria-label="כמות"><button type="button" class="btn ghost sm" data-act="cDelRow" data-i="'+i+'">הסרה</button></div>'}).join('')+
+    '</div><button type="button" class="btn ghost sm" data-act="cAddRow" style="margin-top:8px">+ הוספת פריט</button></div>';
+}
+function cIqPlaceholder(){return C.dom?'חיפוש ב'+C.dom+': שם פריט או קטגוריה':'חיפוש פריט'}
+function cRefresh(){
+  var p=$('#cPick'); if(p)p.innerHTML=cPicks();
+  var t=$('#cTabs'); if(t)t.innerHTML=domTabs('cDom',C.dom,C.items);
+  var c=$('#cCustom'); if(c)c.innerHTML=cCustomHtml();
+}
+function renderCompanyStamp(){
+  var iss=C.type==='issue';
+  modal(dlgHead('החתמה פלוגתית')+
+    '<div class="body"><div class="seg"><button type="button" data-act="cType" data-v="issue" aria-pressed="'+iss+'">החתמה (ציוד יוצא לפלוגה)</button><button type="button" data-act="cType" data-v="return" aria-pressed="'+!iss+'">זיכוי (ציוד חוזר מהפלוגה)</button></div>'+
+    '<label class="f">פלוגה<select id="cCo" data-chg="cCo">'+allCompanies().map(function(x){return '<option'+(x===C.company?' selected':'')+'>'+esc(x)+'</option>'}).join('')+'</select></label>'+
+    '<div><b style="font-size:13px">'+(iss?'פריטים מהקטלוג':'ציוד חתום על הפלוגה')+'</b>'+
+    '<div id="cTabs" style="margin-top:6px">'+domTabs('cDom',C.dom,C.items)+'</div>'+
+    '<input id="cIq" type="search" data-inp="cIq" placeholder="'+esc(cIqPlaceholder())+'" value="'+esc(C.iq||'')+'" aria-label="חיפוש פריט" style="width:100%;margin-top:6px"><div class="picks" id="cPick" style="margin-top:6px">'+cPicks()+'</div></div>'+
+    '<div id="cCustom">'+cCustomHtml()+'</div>'+
+    '<label class="f">'+(iss?'שם המחתים *':'שם המזכה *')+'<input id="cSigner" data-inp="cSigner" maxlength="60" placeholder="שם מלא של מי שמבצע" value="'+esc(C.signer)+'"></label>'+
+    '<label class="f">שם נציג הפלוגה ('+(iss?'המקבל':'המחזיר')+')<input id="cRecv" data-inp="cRecv" maxlength="60" value="'+esc(C.receiver)+'"></label>'+
+    '<label class="f">הערות<input id="cNotes" data-inp="cNotes" maxlength="200" value="'+esc(C.notes)+'"></label>'+
+    '<p class="err" id="err" role="alert"></p></div>'+
+    '<footer><button type="button" class="btn ghost" data-act="close">ביטול</button><button type="button" class="btn" id="cGo" data-act="cSubmit">'+(iss?'בצע החתמה':'בצע זיכוי')+'</button></footer>');
+}
+async function submitCompany(){
+  if(!C.company)return stampErr('בחר פלוגה');
+  if(!(C.signer||'').trim())return stampErr('נא למלא שם '+(C.type==='issue'?'המחתים':'המזכה'));
+  var lines=[], keys=Object.keys(C.items), entries=companyEntries(C.company);
+  for(var k=0;k<keys.length;k++){
+    var key=keys[k], q=Number(C.items[key]);
+    if(!(q>=1)||Math.floor(q)!==q)return stampErr('כמות לא תקינה');
+    if(C.type==='issue'){
+      var it=S.inventory[key];
+      if(!it){var scn=savedCustoms()[key];if(scn){lines.push({itemId:'',itemName:scn.slice(0,80),quantity:q});continue}return stampErr('פריט לא נמצא בקטלוג')}
+      if(!S.perm.owner&&S.perm.domains.indexOf(it.domain)<0)return stampErr('אין לך הרשאה להחתים בתחום '+it.domain);
+      if(availOf(key)<q)return stampErr('אין מספיק מלאי ב"'+it.name+'". זמין: '+availOf(key));
+      lines.push({itemId:key,itemName:it.name,quantity:q});
+    }else{
+      var e=entries.filter(function(x){return x.key===key})[0];
+      if(!e)return stampErr('הפריט אינו חתום על הפלוגה');
+      if(e.count<q)return stampErr('על הפלוגה חתומות רק '+e.count+' יחידות מ"'+e.name+'"');
+      var it2=e.itemId&&S.inventory[e.itemId];
+      if(it2&&!S.perm.owner&&S.perm.domains.indexOf(it2.domain)<0)return stampErr('אין לך הרשאה לזכות בתחום '+it2.domain);
+      lines.push({itemId:e.itemId||'',itemName:e.name,quantity:q});
+    }
+  }
+  if(C.type==='issue'){
+    for(var r=0;r<C.custom.length;r++){
+      var nm=String(C.custom[r].name||'').trim(), cq=Number(C.custom[r].qty);
+      if(!nm&&!C.custom[r].qty)continue;
+      if(!nm)return stampErr('נא למלא שם לכל פריט שנוסף ידנית');
+      if(!(cq>=1)||Math.floor(cq)!==cq)return stampErr('כמות לא תקינה: '+nm);
+      lines.push({itemId:'',itemName:nm.slice(0,80),quantity:cq});
+    }
+  }
+  if(!lines.length)return stampErr(C.type==='issue'?'סמן פריט מהקטלוג או הוסף פריט ידנית':'סמן לפחות פריט אחד לזיכוי');
+  var btn=$('#cGo'); btn.disabled=true; stampErr('');
+  var done=0, type=C.type, now=new Date().toISOString();
+  try{
+    for(var j=0;j<lines.length;j++){
+      await S.db.collection('transactions').add({scope:'company',company:C.company,itemId:lines[j].itemId,itemName:lines[j].itemName,type:type,quantity:lines[j].quantity,ts:now,by:S.uid,signerName:C.signer.trim().slice(0,60),receiverName:(C.receiver||'').trim().slice(0,60),notes:(C.notes||'').slice(0,200)});
+      done++;
+    }
+    rememberSigner(C.signer.trim()); closeModal(); toast(type==='issue'?'ההחתמה הפלוגתית נשמרה':'הזיכוי הפלוגתי נשמר');
+  }catch(err){
+    btn.disabled=false;
+    stampErr(done?'חלק מהפריטים נשמרו ('+done+' מתוך '+lines.length+'). בדוק ביומן ונסה שוב לשאר.':'השמירה נכשלה. בדוק חיבור והרשאות ונסה שוב.');
+  }
+}
+
+/* ---------- weapon registry ---------- */
+var W=null;
+function isTracked(i){return !!i&&i.domain==='נשקייה'&&i.serialTrack!==false}
+function isLow(i){return i&&i.lowStock!==''&&i.lowStock!=null&&availOf(i.id)<=Number(i.lowStock)}
+function weaponItems(){return Object.keys(S.inventory).map(function(k){return S.inventory[k]}).filter(isTracked).sort(function(a,b){return String(a.name).localeCompare(String(b.name),'he')})}
+function wpList(iid){return Object.keys(S.weapons).map(function(k){return S.weapons[k]}).filter(function(w){return w.itemId===iid})}
+function wpKey(w){return w.itemId+'|'+(w.serial?'s:'+w.serial:'w:'+w.weaponNo)}
+function wpExplicit(w){
+  if(w.apson&&w.soldierId)return w.soldierId;
+  var li=(S.idx.lastIssue||{})[wpKey(w)], as=w.assignedAt||'';
+  if(li&&String(li.ts)>as)return '';
+  return as?(w.soldierId||''):'';
+}
+function wpOwner(w){
+  if(w.apson&&w.soldierId)return w.soldierId;
+  var li=(S.idx.lastIssue||{})[wpKey(w)], as=w.assignedAt||'';
+  if(li&&String(li.ts)>as)return li.soldierId||'';
+  return as?(w.soldierId||''):'';
+}
+function wpHolder(w){var u=(S.idx.units||{})[wpKey(w)];return u?u.soldierId:''}
+function wpFree(sid,iid){return wpList(iid).filter(function(w){return wpOwner(w)===sid&&!wpHolder(w)})}
+function wpLabel(w){return (w.weaponNo||'')+(w.weaponNo&&w.serial?' · ':'')+(w.serial?"צ' "+w.serial:'')}
+function wpFind(iid,serial,wno){
+  var s=nz(serial).toLowerCase(), n=nz(wno).toLowerCase(), l=wpList(iid);
+  var a=s?l.filter(function(w){return nz(w.serial).toLowerCase()===s})[0]:null;
+  var b=n?l.filter(function(w){return nz(w.weaponNo).toLowerCase()===n})[0]:null;
+  if(a&&b&&a!==b)return {err:"הצ' ומספר הנשק שהוזנו שייכים לשני נשקים שונים במלאי הנשקים."};
+  return {w:a||b||null};
+}
+function wpDup(iid,serial,wno,exceptId){
+  var s=nz(serial).toLowerCase(), n=nz(wno).toLowerCase();
+  return Object.keys(S.weapons).some(function(k){
+    var w=S.weapons[k]; if(w.id===exceptId)return false;
+    return (s&&nz(w.serial).toLowerCase()===s)||(n&&w.itemId===iid&&nz(w.weaponNo).toLowerCase()===n);
+  });
+}
+function assignedHtml(sid){
+  var out=[];
+  weaponItems().forEach(function(i){wpFree(sid,i.id).forEach(function(w){out.push('<div class="sr"><div><b>'+esc(i.name)+'</b><div class="mono" style="font-size:12px">'+esc(wpLabel(w))+'</div></div><span class="pill info">משויך, טרם הוחתם</span></div>')})});
+  if(!out.length)return '';
+  return '<div><b style="font-size:13px">נשק משויך מראש</b><div class="list" style="margin-top:8px">'+out.join('')+'</div></div>';
+}
+function openWeapons(iid,q){var l=weaponItems();W={sel:(iid&&S.inventory[iid])?iid:(l[0]?l[0].id:''),q:q||'',assign:'',aq:''};renderWeapons()}
+function registryRows(){
+  var rows=[], seen={};
+  Object.keys(S.weapons).forEach(function(k){
+    var w=S.weapons[k]; seen[wpKey(w)]=1;
+    rows.push({w:w,key:wpKey(w),itemId:w.itemId,serial:w.serial||'',weaponNo:w.weaponNo||'',holder:wpHolder(w),owner:wpOwner(w),apson:!!w.apson&&!!wpOwner(w),reg:true});
+  });
+  var U=(S.idx&&S.idx.units)||{};
+  Object.keys(U).forEach(function(k){
+    if(seen[k])return;
+    var u=U[k];
+    if(!isTracked(S.inventory[u.itemId]))return;
+    rows.push({w:null,key:k,itemId:u.itemId,serial:u.serial||'',weaponNo:u.weaponNo||'',holder:u.soldierId,owner:((S.idx.lastIssue||{})[k]||{}).soldierId||'',apson:false,reg:false});
+  });
+  return rows;
+}
+function weaponsHtml(){
+  var all=registryRows();
+  var q=S.wpQ.trim();
+  var rows=all.filter(function(r){
+    if(S.wpItem!=='ALL'&&r.itemId!==S.wpItem)return false;
+    if(S.wpSt==='STOCK'&&r.holder)return false;
+    if(S.wpSt==='OUT'&&!r.holder)return false;
+    if(S.wpSt==='ASSIGNED'&&!r.owner)return false;
+    if(S.wpSt==='APSON'&&!r.apson)return false;
+    if(S.wpSt==='FREE'&&(r.owner||r.holder))return false;
+    var hs=S.soldiers[r.holder]||{}, os=S.soldiers[r.owner]||{};
+    return hit(q,[r.serial,r.weaponNo,hs.name,os.name,hs.id,os.id]);
+  }).sort(function(a,b){
+    var ia=(S.inventory[a.itemId]||{}).name||'', ib=(S.inventory[b.itemId]||{}).name||'';
+    return ia.localeCompare(ib,'he')||String(a.weaponNo||a.serial).localeCompare(String(b.weaponNo||b.serial),'he',{numeric:true});
+  });
+  S._wpRows=rows;
+  var reg=all.filter(function(r){return r.reg}).length, out=all.filter(function(r){return r.holder}).length, asg=all.filter(function(r){return r.owner}).length, aps=all.filter(function(r){return r.apson}).length, unreg=all.length-reg;
+  var chk=weaponItems().map(function(i){return wpIssuesHtml(i,false).replace(/<div class="warnline">/g,'<div class="warnline"><b>'+esc(i.name)+':</b> ')}).join('');
+  var sum=(chk?'<div class="list"><b style="font-size:13px">בדיקות דיוק</b>'+chk+'</div>':(all.length?'<p class="note">בדיקות דיוק: הכול תקין.</p>':''))+'<div class="kpis" style="margin:0">'+[['במאגר',reg,''],['חתומים על חייל',out,'warn'],['משויכים',asg,'info'],['מאופסנים',aps,'ok']].map(function(x){return '<div class="kpi '+x[2]+'"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>'}).join('')+'</div>'+
+    (unreg?'<div class="banner soft">'+unreg+' נשקים חתומים על חיילים אבל לא רשומים במאגר (הוחתמו עם צ&#39; שהוקלד ידנית).'+(can('manageInventory')?' אפשר להוסיף אותם למאגר בכפתור בכל שורה.':'')+'</div>':'');
+  if(!rows.length)return sum+'<p class="empty">'+(all.length?'לא נמצאו נשקים לפי הסינון.':'המאגר ריק. הוסף נשקים דרך "פריט חדש" בתחום נשקייה או דרך "ניהול נשקים".')+'</p>';
+  return sum+'<div class="list">'+rows.slice(0,300).map(function(r){
+    var it=S.inventory[r.itemId], hs=S.soldiers[r.holder], os=S.soldiers[r.owner];
+    var lab=(r.serial?"צ' "+esc(r.serial):'')+(r.serial&&r.weaponNo?' · ':'')+esc(r.weaponNo);
+    return '<article class="row"><div class="who"><b class="mono" style="font-size:15px">'+(lab||'ללא מספר')+'</b><div class="meta"><span>'+esc(it?it.name:r.itemId)+'</span>'+(r.reg?'':'<span class="tag warn">לא רשום במאגר</span>')+'</div></div>'+
+      '<div>'+(r.holder?'<span class="pill warn">חתום על '+esc(hs?hs.name:r.holder)+'</span>'+(hs?'<div class="muted" style="font-size:12px">'+esc(hs.company||'')+(hs.squad?' · '+esc(hs.squad):'')+'</div>':''):'<span class="pill ok">במחסן</span>')+'</div>'+
+      '<div>'+(r.owner?'<span class="pill info">משויך ל'+esc(os?os.name:r.owner)+'</span>'+(r.apson?' <span class="pill ok">אפסון</span>':''):'<span class="muted">לא משויך</span>')+'</div>'+
+      '<div class="acts">'+(can('manageInventory')?(r.reg?(r.owner?'<label class="att"><input type="checkbox" data-chg="wApson" data-id="'+esc(r.w.id)+'"'+(r.apson?' checked':'')+'> אפסון</label>':'')+'<button class="btn ghost sm" data-act="wOpen" data-id="'+esc(r.w.id)+'">שיוך</button>':'<button class="btn ghost sm" data-act="wRegister" data-key="'+esc(r.key)+'">הוספה למאגר</button>'):'')+'</div></article>';
+  }).join('')+(rows.length>300?'<p class="note">מוצגים 300 ראשונים. השתמש בחיפוש.</p>':'')+'</div>';
+}
+async function wRegister(t){
+  var u=((S.idx&&S.idx.units)||{})[t.dataset.key]; if(!u)return;
+  t.disabled=true;
+  try{await S.db.collection('weapons').add({itemId:u.itemId,serial:u.serial||'',weaponNo:u.weaponNo||'',soldierId:'',apson:false,assignedAt:'',by:S.uid,at:new Date().toISOString()});toast('הנשק נוסף למאגר')}
+  catch(e){t.disabled=false;toast('ההוספה נכשלה. ניהול נשקים דורש הרשאת עורך.')}
+}
+function wRowsHtml(){
+  var all=wpList(W.sel), q=W.q.trim();
+  var list=all.filter(function(w){var s=S.soldiers[wpOwner(w)];return hit(q,[w.serial,w.weaponNo,s&&s.name])}).sort(function(a,b){return String(a.weaponNo||a.serial).localeCompare(String(b.weaponNo||b.serial),'he',{numeric:true})});
+  if(!list.length)return '<p class="empty">'+(all.length?'לא נמצאו נשקים לחיפוש.':'עדיין לא הוזנו נשקים לפריט הזה.')+'</p>';
+  return list.slice(0,150).map(function(w){
+    var ow=wpOwner(w), as=S.soldiers[ow], held=wpHolder(w), hs=held&&S.soldiers[held];
+    return '<div class="unit"><div class="unithead">'+(held?'<span class="pill warn">חתום על '+esc(hs?hs.name:held)+'</span>':'<span class="pill ok">במחסן</span>')+'<button type="button" class="btn danger sm" data-act="wDel" data-id="'+esc(w.id)+'">מחיקה</button></div>'+
+      '<label class="f">צ&#39; נשק<input data-chg="wSerial" data-id="'+esc(w.id)+'" value="'+esc(w.serial||'')+'" maxlength="40" dir="ltr"></label>'+
+      '<label class="f">מספר נשק<input data-chg="wNo" data-id="'+esc(w.id)+'" value="'+esc(w.weaponNo||'')+'" maxlength="60"></label>'+
+      '<div class="bar"><span>משויך ל: <b>'+(ow?esc(as?as.name:ow):'אין')+'</b>'+(ow&&w.apson?' <span class="pill ok">מאופסן</span>':'')+'</span><button type="button" class="btn ghost sm" data-act="wAssign" data-id="'+esc(w.id)+'">'+(ow?'החלפת חייל':'שיוך לחייל')+'</button>'+(ow?'<button type="button" class="btn ghost sm" data-act="wUnassign" data-id="'+esc(w.id)+'">ביטול שיוך</button>':'')+'</div>'+
+      (ow?'<label class="att" style="margin:0"><input type="checkbox" data-chg="wApson" data-id="'+esc(w.id)+'"'+(w.apson?' checked':'')+'> אפסון: הנשק שייך לחייל תמיד</label>':'')+'</div>';
+  }).join('')+(list.length>150?'<p class="note">מוצגים 150 ראשונים. השתמש בחיפוש.</p>':'');
+}
+function wAssignHtml(){
+  if(!W.assign||!S.weapons[W.assign])return '';
+  var w=S.weapons[W.assign], q=(W.aq||'').trim(), res='';
+  if(q){
+    var arr=soldierMatches(q).slice(0,8);
+    res=arr.length?'<div class="sugs">'+arr.map(function(s){return '<button type="button" class="sug" data-act="wAssignTo" data-id="'+esc(s.id)+'"><b>'+esc(s.name)+'</b><span class="meta"><span class="mono">'+esc(s.id)+'</span><span>'+esc(s.company||'')+'</span></span></button>'}).join('')+'</div>':'<p class="note">לא נמצא חייל.</p>';
+  }
+  return '<div class="panel"><b style="font-size:13px">שיוך הנשק '+esc(wpLabel(w))+'</b><input id="wAq" type="search" data-inp="wAq" placeholder="חיפוש חייל: שם, מ״א, ת״ז או טלפון" value="'+esc(W.aq||'')+'" style="width:100%;margin-top:6px" autocomplete="off">'+res+'<button type="button" class="btn ghost sm" data-act="wAssignCancel" style="margin-top:8px">סגירה</button></div>';
+}
+function wRefresh(){var a=$('#wRows'),b=$('#wAssignPane');if(a)a.innerHTML=wRowsHtml();if(b)b.innerHTML=wAssignHtml()}
+function renderWeapons(){
+  var items=weaponItems();
+  if(!items.length){modal(dlgHead('ניהול נשקים')+'<div class="body"><p class="empty">אין פריטי נשקייה בקטלוג. הוסף פריט בתחום נשקייה ואז חזור לכאן.</p></div><footer><button type="button" class="btn" data-act="close">סגירה</button></footer>');return}
+  if(!S.inventory[W.sel])W.sel=items[0].id;
+  modal(dlgHead('ניהול נשקים','<span>נשק שמוחתם לחייל נשמר עליו אוטומטית. סימון אפסון נועל אותו לחייל עד שתשנה.</span>')+
+    '<div class="body"><label class="f">סוג נשק<select data-chg="wSel">'+items.map(function(i){return '<option value="'+esc(i.id)+'"'+(i.id===W.sel?' selected':'')+'>'+esc(i.name)+' ('+wpList(i.id).length+' רשומים)</option>'}).join('')+'</select></label>'+
+    '<div class="panel"><b style="font-size:13px">הוספת נשק</b><div class="bar" style="margin-top:6px"><input id="wNewSerial" placeholder="צ&#39; נשק" dir="ltr" maxlength="40" style="flex:1 1 110px;min-width:0"><input id="wNewNo" placeholder="מספר נשק (ערן נשק 1)" maxlength="60" style="flex:1 1 150px;min-width:0"><button type="button" class="btn sm" data-act="wAdd">הוספה</button></div></div>'+
+    '<div class="panel"><b style="font-size:13px">הוספה מרובה</b><p class="note">שורה לכל נשק: צ&#39;, מספר נשק, ומספר אישי של החייל (אופציונלי), מופרדים בפסיק או טאב. אפשר להדביק מאקסל.</p><textarea id="wBulk" rows="4" dir="ltr" style="width:100%" placeholder="1234567, ערן נשק 1, 7654321"></textarea><button type="button" class="btn ghost sm" data-act="wBulkGo" style="margin-top:6px">הוספת הרשימה</button></div>'+
+    '<div id="wAssignPane">'+wAssignHtml()+'</div>'+
+    '<input type="search" data-inp="wq" placeholder="חיפוש לפי צ&#39;, מספר נשק או שם חייל" value="'+esc(W.q)+'" style="width:100%"><div class="list" id="wRows">'+wRowsHtml()+'</div>'+
+    '<p class="err" id="err" role="alert"></p></div><footer><button type="button" class="btn" data-act="close">סיום</button></footer>');
+}
+async function wAdd(){
+  var s=nz($('#wNewSerial').value), n=nz($('#wNewNo').value);
+  if(!s&&!n)return stampErr("נא להזין צ' או מספר נשק");
+  if(wpDup(W.sel,s,n,''))return stampErr("הצ' או מספר הנשק כבר רשומים במאגר (צ' חייב להיות ייחודי בכל סוגי הנשק)");
+  try{await S.db.collection('weapons').add({itemId:W.sel,serial:s,weaponNo:n,soldierId:'',apson:false,assignedAt:'',by:S.uid,at:new Date().toISOString()});await bumpTotal(W.sel,1);$('#wNewSerial').value='';$('#wNewNo').value='';stampErr('');toast('הנשק נוסף');wRefresh()}
+  catch(e){stampErr('השמירה נכשלה. ניהול נשקים דורש הרשאת עורך.')}
+}
+async function wBulkGo(){
+  var lines=($('#wBulk').value||'').split(/\r?\n/).map(function(x){return x.trim()}).filter(Boolean);
+  if(!lines.length)return stampErr('הדבק לפחות שורה אחת');
+  var ok=0, bad=[], seenS={}, seenN={};
+  for(var i=0;i<lines.length;i++){
+    var p=lines[i].split(/[\t,;]/).map(nz), s=p[0]||'', n=p[1]||'', who=p[2]||'', sid='';
+    if(!s&&!n){bad.push(i+1);continue}
+    if(wpDup(W.sel,s,n,'')||(s&&seenS[s.toLowerCase()])||(n&&seenN[n.toLowerCase()])){bad.push(i+1);continue}
+    if(who){
+      if(S.soldiers[who])sid=who;
+      else{var m=Object.keys(S.soldiers).filter(function(k){return S.soldiers[k].name===who});if(m.length===1)sid=m[0];else{bad.push(i+1);continue}}
+    }
+    try{await S.db.collection('weapons').add({itemId:W.sel,serial:s,weaponNo:n,soldierId:sid,apson:false,assignedAt:sid?new Date().toISOString():'',by:S.uid,at:new Date().toISOString()});ok++;if(s)seenS[s.toLowerCase()]=1;if(n)seenN[n.toLowerCase()]=1}
+    catch(e){if(ok)await bumpTotal(W.sel,ok).catch(function(){});stampErr('השמירה נכשלה אחרי '+ok+' נשקים. ניהול נשקים דורש הרשאת עורך.');return}
+  }
+  if(ok)await bumpTotal(W.sel,ok).catch(function(){});
+  $('#wBulk').value=bad.length?lines.filter(function(x,i){return bad.indexOf(i+1)>=0}).join('\n'):'';
+  stampErr(bad.length?'נוספו '+ok+'. שורות שלא נקלטו (כפילות, חייל לא מזוהה או שורה ריקה): '+bad.join(', ')+'. הן נשארו בתיבה לתיקון.':'');
+  toast('נוספו '+ok+' נשקים');wRefresh();
+}
+function wEdit(t,field){
+  var w=S.weapons[t.dataset.id]; if(!w)return;
+  var nv=nz(t.value), cur=field==='serial'?(w.serial||''):(w.weaponNo||'');
+  if(nv===cur)return;
+  var ns=field==='serial'?nv:(w.serial||''), nn=field==='weaponNo'?nv:(w.weaponNo||'');
+  var rev=function(){t.value=cur};
+  if(wpHolder(w)){rev();return stampErr('אי אפשר לערוך נשק שחתום כרגע על חייל. זכה אותו קודם.')}
+  if(!ns&&!nn){rev();return stampErr("חייב להישאר לפחות צ' או מספר נשק")}
+  if(wpDup(w.itemId,ns,nn,w.id)){rev();return stampErr('הערך כבר קיים בנשק אחר')}
+  var patch={};patch[field]=nv;
+  stampErr('');
+  S.db.doc('weapons/'+w.id).update(patch).then(function(){toast('נשמר')}).catch(function(){rev();stampErr('השמירה נכשלה. ניהול נשקים דורש הרשאת עורך.')});
+}
+async function wDel(t){
+  var w=S.weapons[t.dataset.id]; if(!w)return;
+  if(wpHolder(w))return stampErr('אי אפשר למחוק נשק שחתום כרגע על חייל.');
+  if(!t.dataset.sure){t.dataset.sure='1';t.textContent='לחץ שוב למחיקה';return}
+  t.disabled=true;
+  try{await S.db.doc('weapons/'+w.id).delete();delete S.weapons[w.id];await bumpTotal(w.itemId,-1).catch(function(){});wRefresh();toast('הנשק נמחק')}
+  catch(e){t.disabled=false;stampErr('המחיקה נכשלה. ניהול נשקים דורש הרשאת עורך.')}
+}
+function wSetSoldier(id,sid){
+  var w=S.weapons[id]; if(!w)return;
+  var prev={soldierId:w.soldierId||'',apson:!!w.apson,assignedAt:w.assignedAt||''};
+  var patch={soldierId:sid,apson:false,assignedAt:new Date().toISOString()};
+  Object.assign(w,patch); wRefresh();
+  S.db.doc('weapons/'+id).update(patch).catch(function(){Object.assign(w,prev);wRefresh();stampErr('השמירה נכשלה. ניהול נשקים דורש הרשאת עורך.')});
+}
+function wApson(t){
+  var w=S.weapons[t.dataset.id]; if(!w)return;
+  var v=t.checked, ow=wpOwner(w);
+  if(v&&!ow){t.checked=false;toast('כדי לאפסן צריך קודם נשק משויך לחייל');return}
+  var prev={apson:!!w.apson,soldierId:w.soldierId||'',assignedAt:w.assignedAt||''};
+  var patch=v?{apson:true,soldierId:ow,assignedAt:new Date().toISOString()}:{apson:false};
+  Object.assign(w,patch);
+  if(W)wRefresh();
+  if(S.tab==='weapons')renderList();
+  S.db.doc('weapons/'+w.id).update(patch).then(function(){toast(v?'הנשק הועבר לאפסון':'האפסון בוטל')}).catch(function(){Object.assign(w,prev);if(W)wRefresh();if(S.tab==='weapons')renderList();toast('השמירה נכשלה. ניהול נשקים דורש הרשאת עורך.')});
+}
+function bumpTotal(iid,n){
+  var it=S.inventory[iid]; if(!it||!n)return Promise.resolve();
+  var nt=Math.max(issuedOf(iid),(Number(it.total)||0)+n);
+  return S.db.doc('inventory/'+iid).update({total:nt});
+}
+function regOptions(iid,sid,selWid){
+  var l=wpList(iid).filter(function(w){return !wpHolder(w)&&(!wpExplicit(w)||wpExplicit(w)===sid)});
+  l.sort(function(a,b){return (b.soldierId===sid)-(a.soldierId===sid)||String(a.weaponNo||a.serial).localeCompare(String(b.weaponNo||b.serial),'he',{numeric:true})});
+  return l.map(function(w){return '<option value="'+esc(w.id)+'"'+(w.id===selWid?' selected':'')+'>'+esc(wpLabel(w))+(w.soldierId===sid?' (משויך לחייל)':'')+'</option>'}).join('');
+}
+function newUnitRows(iid,need){
+  var rows=[];
+  if(M&&M.soldierId)wpFree(M.soldierId,iid).slice(0,need).forEach(function(w){rows.push({serial:w.serial||'',wno:w.weaponNo||'',wid:w.id})});
+  while(rows.length<need)rows.push({serial:'',wno:''});
+  return rows;
+}
+function assignedHint(){
+  if(!M||M.type!=='issue'||!M.soldierId||M.dom!=='נשקייה')return '';
+  var out=[];
+  allowedItems().forEach(function(i){
+    if(!isTracked(i)||i.domain!==M.dom)return;
+    wpFree(M.soldierId,i.id).forEach(function(w){
+      if((M.units[i.id]||[]).some(function(u){return u.wid===w.id}))return;
+      out.push('<div class="sr"><div><b>'+esc(i.name)+'</b><div class="mono" style="font-size:12px">'+esc(wpLabel(w))+'</div></div><button type="button" class="btn ghost sm" data-act="mUseAssigned" data-id="'+esc(i.id)+'" data-wid="'+esc(w.id)+'">סימון להחתמה</button></div>');
+    });
+  });
+  return out.length?'<div class="list" style="margin-bottom:8px"><b style="font-size:13px">נשק משויך לחייל (טרם הוחתם)</b>'+out.join('')+'</div>':'';
+}
+
+/* ---------- Excel export ---------- */
+function expBtn(act){return can('exportData')?'<button class="btn ghost" data-act="'+act+'">ייצוא לאקסל</button>':''}
+function stamp8(){var d=new Date();function p(n){return String(n).padStart(2,'0')}return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())}
+async function xlsxSave(filename,sheets){
+  if(!can('exportData'))return toast('אין לך הרשאת ייצוא');
+  if(!window.XLSX)return toast('ספריית האקסל לא נטענה. בדוק חיבור ורענן.');
+  var dl=DL;
+  var wb=XLSX.utils.book_new();
+  sheets.forEach(function(s){
+    var ws=XLSX.utils.aoa_to_sheet(s.rows);
+    ws['!cols']=s.rows[0].map(function(_,c){var w=8;s.rows.forEach(function(r){var l=String(r[c]==null?'':r[c]).length;if(l>w)w=l});return {wch:Math.min(40,w+2)}});
+    XLSX.utils.book_append_sheet(wb,ws,s.name.slice(0,31));
+  });
+  wb.Workbook={Views:[{RTL:true}]};
+  var out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  try{await dl.save({filename:filename+'-'+stamp8()+'.xlsx',data:out});toast('הקובץ מוכן')}
+  catch(e){if(!e||e.code!=='declined')toast('הייצוא נכשל')}
+}
+function sheetSoldiers(list){
+  var rows=[['מספר אישי','שם','ת״ז','מספר זהו','פלוגה','מחלקה','טלפון','סטטוס שלישות','בסיפוח']];
+  list.forEach(function(s){rows.push([String(s.id),s.name||'',s.idNumber||'',s.zehuNumber||'',s.company||'',s.squad||'',s.phone||'',STATUS[statusOf(s.id)].t,isAttached(s.id)?'כן':'לא'])});
+  return {name:'חיילים',rows:rows};
+}
+function sheetInventory(items){
+  var rows=[['קוד','שם פריט','תחום','קטגוריה','קבוצה','מלאי כולל','מוחתם','זמין','מאופסן','סף התראה']];
+  items.forEach(function(i){rows.push([i.id,i.name||'',i.domain||'',i.category||'',i.group||'',Number(i.total)||0,issuedOf(i.id),availOf(i.id),isTracked(i)?wpList(i.id).filter(function(w){return w.apson&&wpOwner(w)}).length:'',i.lowStock===''||i.lowStock==null?'':Number(i.lowStock)])});
+  return {name:'מלאי',rows:rows};
+}
+function sheetCompany(){
+  var rows=[['פלוגה','פריט','מקור','כמות']], ch=(S.idx&&S.idx.cheld)||{};
+  Object.keys(ch).sort().forEach(function(c){Object.keys(ch[c]).forEach(function(k){
+    var e=ch[c][k]; if(!(e.count>0))return;
+    var it=e.itemId&&S.inventory[e.itemId];
+    rows.push([c,it?it.name:e.name,it?'קטלוג':'פריט חופשי',e.count]);
+  })});
+  return {name:'החתמות פלוגתיות',rows:rows};
+}
+function sheetWeapons(list){
+  var rows=[['סוג נשק','צ׳','מספר נשק','מצב','חתום על','מ״א חותם','פלוגה','משויך ל','מ״א משויך','אפסון','רשום במאגר']];
+  list.forEach(function(r){
+    var it=S.inventory[r.itemId]||{}, hs=S.soldiers[r.holder]||{}, os=S.soldiers[r.owner]||{};
+    rows.push([it.name||r.itemId,r.serial,r.weaponNo,r.holder?'חתום':'במחסן',r.holder?(hs.name||r.holder):'',r.holder||'',hs.company||'',r.owner?(os.name||r.owner):'',r.owner||'',r.apson?'כן':'',r.reg?'כן':'לא']);
+  });
+  return {name:'נשקים',rows:rows};
+}
+function sheetForms(arr){
+  var rows=[['פלוגה','תאריך ושעה','סוג','חייל','מספר אישי','פריטים','חתום','מחתים']];
+  arr.forEach(function(r){rows.push([companyOfRc(r),fmt(r.ts),r.type==='issue'?'החתמה':'זיכוי',r.soldierName||r.soldierId,r.soldierId,(r.lines||[]).map(function(l){return l.name+(l.qty>1?' x'+l.qty:'')+(l.serial?" צ' "+l.serial:'')}).join('; '),r.signature?'כן':'לא',r.signerName||''])});
+  return {name:'טפסי חתימה',rows:rows};
+}
+function sheetLog(arr){
+  var rows=[['תאריך ושעה','סוג','חייל / פלוגה','מספר אישי','פריט','כמות','צ׳','מספר נשק','מחתים / מזכה','נציג פלוגה','הערות','נערך']];
+  arr.forEach(function(t){
+    var s=S.soldiers[t.soldierId], i=S.inventory[t.itemId], comp=t.scope==='company';
+    rows.push([fmt(t.ts),t.type==='issue'?'החתמה':'זיכוי',comp?t.company:(s?s.name:t.soldierId),comp?'':(t.soldierId||''),i?i.name:(t.itemName||t.itemId||''),Number(t.quantity)||0,t.serial||'',t.weaponNo||'',t.signerName||'',t.receiverName||'',t.notes||'',t.editedAt?'כן':'']);
+  });
+  return {name:'תנועות',rows:rows};
+}
+function sheetSets(){
+  var rows=[['סט','פריט','כמות']];
+  setIds().forEach(function(k){var s=S.sets[k];Object.keys(s.items||{}).forEach(function(iid){var it=S.inventory[iid];rows.push([s.name,it?it.name:iid,Number(s.items[iid])||0])})});
+  return {name:'סטים',rows:rows};
+}
+function allSoldiersList(){return Object.keys(S.soldiers).map(function(k){return S.soldiers[k]}).sort(function(a,b){return (a.company||'').localeCompare(b.company||'','he')||(a.name||'').localeCompare(b.name||'','he')})}
+function allItemsList(){return Object.keys(S.inventory).map(function(k){return S.inventory[k]}).sort(function(a,b){return String(a.id).localeCompare(String(b.id))})}
+function allLogList(){return Object.keys(S.transactions).map(function(k){return S.transactions[k]}).sort(function(a,b){return String(b.ts).localeCompare(String(a.ts))})}
+
+/* ---------- soldier signature + receipt form ---------- */
+var SG=null, PAD={drew:false,clear:function(){}}, RC=null;
+function rcTitle(type){return type==='file'?'תיק החתמה':type==='issue'?'טופס חתימה על ציוד':'טופס זיכוי ציוד'}
+function rcStatement(type){return type==='file'?'מסמך זה מרכז את הציוד החתום על שם החייל נכון למועד ההפקה.':type==='issue'?'אני החתום מטה מאשר שקיבלתי את הציוד המפורט לעיל, ואני אחראי עליו עד לזיכויו.':'אני מאשר שהציוד המפורט לעיל הוחזר ונקלט במחסן.'}
+function rcLineText(l){return l.name+' × '+l.qty+((l.serial||l.weaponNo)?' ('+((l.serial?"צ' "+l.serial:'')+(l.serial&&l.weaponNo?' · ':'')+(l.weaponNo||''))+')':'')}
+function rcFromSG(){
+  var s=S.soldiers[SG.sid]||{};
+  return {id:SG.rid,type:SG.type,ts:SG.ts,soldierId:SG.sid,soldierName:s.name||SG.sid,soldierCompany:s.company||'',soldierPhone:s.phone||'',signerName:SG.signer,notes:SG.notes||'',lines:SG.lines,txIds:SG.txIds||[],by:S.uid};
+}
+var UNIT_NAME="לוגיסטיקה גדי׳ 969", UNIT_NO='969';
+function rcFormTitle(type){return type==='file'?'תיק החתמה – ריכוז ציוד חתום':type==='issue'?'החתמת ציוד אישי לחייל מילואים בחרום':'זיכוי ציוד אישי מחייל מילואים'}
+function rcDate(ts){try{return new Date(ts).toLocaleDateString('he-IL')}catch(e){return ''}}
+function rcLineNote(l){return (l.serial?"צ' "+l.serial:'')+(l.serial&&l.weaponNo?' · ':'')+(l.weaponNo||'')}
+function rcHtml(rc){
+  var th='border:1px solid #444;padding:4px 6px;background:#e4e4e4;font-weight:700;text-align:center;font-size:12px';
+  var td='border:1px solid #444;padding:4px 6px;font-size:13px;height:26px';
+  var lines=rc.lines||[], n=Math.max(10,lines.length), rows='';
+  for(var i=0;i<n;i++){
+    var l=lines[i];
+    rows+='<tr><td style="'+td+';text-align:center;background:#f0f0f0;width:36px">'+(i+1)+'</td><td style="'+td+';width:15%">'+(l?esc(l.sku||''):'')+'</td><td style="'+td+'">'+(l?esc(l.name):'')+'</td><td style="'+td+';text-align:center;width:48px">'+(l?esc(l.qty):'')+'</td><td style="'+td+';width:24%">'+(l?esc(rcLineNote(l)):'')+'</td></tr>';
+  }
+  var sub='border-bottom:1px solid #000;font-weight:700;margin-top:6px';
+  return '<div style="background:#fff;color:#000;border:1px solid #444;padding:12px;border-radius:4px;display:flex;flex-direction:column;gap:8px;overflow-x:auto">'+
+    '<div style="border:2px solid #000;text-align:center;font-weight:800;font-size:18px;padding:6px">'+esc(UNIT_NAME)+'</div>'+
+    '<div style="text-align:center"><b style="text-decoration:underline">טופס 1008</b><div style="font-weight:700">'+esc(rcFormTitle(rc.type))+'</div></div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13px"><span>תאריך: <b>'+esc(rcDate(rc.ts))+'</b></span><span>גדוד: <b>'+UNIT_NO+'</b></span><span>פלוגה: <b>'+esc(rc.soldierCompany||'')+'</b></span><span>נייד: <b dir="ltr">'+esc(rc.soldierPhone||'')+'</b></span></div>'+
+    '<table style="border-collapse:collapse;width:100%;min-width:460px"><thead><tr><th style="'+th+'">מס״ד</th><th style="'+th+'">מק״ט</th><th style="'+th+'">שם הפריט</th><th style="'+th+'">כמות</th><th style="'+th+'">הערות</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    (rc.notes?'<div style="font-size:13px">הערות כלליות: '+esc(rc.notes)+'</div>':'')+
+    '<div style="'+sub+'">פרטי האפסנאי המנפק</div><div style="font-size:13px">שם: <b>'+esc(rc.signerName||'')+'</b></div>'+
+    '<div style="'+sub+'">פרטי החייל המקבל</div><div style="font-size:13px">מ״א: <b class="mono">'+esc(rc.soldierId)+'</b> · שם: <b>'+esc(rc.soldierName)+'</b></div>'+
+    '<div style="font-size:13px">'+esc(rcStatement(rc.type))+'</div>'+
+    (rc.signature?'<div style="font-size:13px">חתימה: <img alt="חתימת החייל" src="'+esc(rc.signature)+'" style="background:#fff;border:1px solid #888;max-width:220px;height:auto;vertical-align:middle"></div>':'<div style="font-size:12px;color:#555">נשמר ללא חתימת חייל.</div>')+
+    '<div style="font-size:11px;color:#666;text-align:center">הופק במערכת ניהול מלאי ושלישות</div></div>';
+}
+function openSign(sg){
+  SG=sg;
+  var s=S.soldiers[sg.sid]||{};
+  modal(dlgHead('חתימת החייל','<span>'+esc(s.name||sg.sid)+'</span>')+
+    '<div class="body"><div class="banner soft">ההחתמה נשמרה. העבר את המכשיר לחייל כדי שיחתום.</div>'+
+    '<div class="panel" style="background:var(--bg)"><b>'+esc(rcTitle(sg.type))+'</b><div class="list" style="margin-top:6px">'+sg.lines.map(function(l){return '<div class="sr"><span>'+esc(rcLineText(l))+'</span></div>'}).join('')+'</div><p style="margin:8px 0 0">'+esc(rcStatement(sg.type))+'</p></div>'+
+    '<div><div class="muted" style="font-size:12px;margin-bottom:4px">חתום כאן באצבע או בעכבר</div><canvas id="sigCanvas" style="width:100%;height:200px;background:#fff;border:1px solid var(--line);border-radius:8px;touch-action:none;display:block"></canvas></div>'+
+    '<p class="err" id="err" role="alert"></p></div>'+
+    '<footer><button type="button" class="btn ghost" data-act="sigSkip">דילוג (ללא חתימה)</button><button type="button" class="btn ghost" data-act="sigClear">ניקוי</button><button type="button" class="btn" id="sigGo" data-act="sigSave">אישור החתימה</button></footer>');
+  initPad();
+}
+function initPad(){
+  var c=$('#sigCanvas'); if(!c)return;
+  var r=c.getBoundingClientRect();
+  c.width=Math.max(300,Math.round(r.width)); c.height=Math.round(c.width*200/Math.max(1,r.width));
+  var x=c.getContext('2d');
+  x.lineWidth=2.5; x.lineCap='round'; x.lineJoin='round'; x.strokeStyle='#000';
+  x.fillStyle='#fff'; x.fillRect(0,0,c.width,c.height);
+  PAD.drew=false;
+  var drawing=false,last=null;
+  function pos(e){var b=c.getBoundingClientRect();return {x:(e.clientX-b.left)*c.width/b.width,y:(e.clientY-b.top)*c.height/b.height}}
+  c.addEventListener('pointerdown',function(e){drawing=true;last=pos(e);try{c.setPointerCapture(e.pointerId)}catch(_){}x.beginPath();x.moveTo(last.x,last.y);x.lineTo(last.x+0.1,last.y+0.1);x.stroke();PAD.drew=true;e.preventDefault()});
+  c.addEventListener('pointermove',function(e){if(!drawing)return;var p=pos(e);x.beginPath();x.moveTo(last.x,last.y);x.lineTo(p.x,p.y);x.stroke();last=p;e.preventDefault()});
+  ['pointerup','pointercancel'].forEach(function(ev){c.addEventListener(ev,function(){drawing=false})});
+  PAD.clear=function(){x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);PAD.drew=false};
+}
+async function sigSave(){
+  if(!SG)return;
+  if(!PAD.drew)return stampErr('נא לחתום במסגרת לפני האישור');
+  var c=$('#sigCanvas'), rc=rcFromSG();
+  rc.signature=c.toDataURL('image/png');
+  $('#sigGo').disabled=true;
+  try{
+    await S.db.doc('receipts/'+rc.id).set(rc);
+  }catch(e){$('#sigGo').disabled=false;return stampErr('שמירת החתימה נכשלה. נסה שוב.')}
+  SG=null; showReceipt(rc,true);
+}
+function sigSkip(){SG=null;closeModal();toast('נשמר ללא חתימת חייל')}
+function waLink(rc){
+  var d=String(rc.soldierPhone||'').replace(/\D/g,'');
+  if(!d)return '';
+  if(d.charAt(0)==='0')d='972'+d.slice(1);
+  var txt=rcTitle(rc.type)+'\n'+rc.soldierName+' (מ״א '+rc.soldierId+')\n'+fmt(rc.ts)+'\n'+(rc.lines||[]).map(function(l){return '• '+rcLineText(l)}).join('\n')+'\n\n'+rcStatement(rc.type)+'\nמחתים: '+(rc.signerName||'');
+  return 'https://wa.me/'+d+'?text='+encodeURIComponent(txt);
+}
+function showReceipt(rc,justSigned){
+  RC=rc;
+  var wa=waLink(rc);
+  modal(dlgHead(rcTitle(rc.type),justSigned?'<span>החתימה נשמרה</span>':'')+
+    '<div class="body">'+rcHtml(rc)+
+    '<p class="note">המערכת לא שולחת הודעות לבד. הלחיצה על "שליחה בוואטסאפ" פותחת הודעה מוכנה עם סיכום הטופס לטלפון של החייל, ואתה שולח אותה. כדי לשלוח את הטופס עם החתימה, שמור אותו כתמונה ושלח.</p>'+
+    '<p class="err" id="err" role="alert"></p></div>'+
+    '<footer>'+(wa?'<a class="btn ghost" href="'+esc(wa)+'" target="_blank" rel="noopener noreferrer">שליחה בוואטסאפ לחייל</a>':'<span class="muted" style="font-size:12px">אין טלפון לחייל</span>')+
+    '<button type="button" class="btn ghost" data-act="rcPng">שמירה כתמונה</button><button type="button" class="btn" data-act="close">סיום</button></footer>');
+}
+function rcOpen(id){
+  if(S.receipts&&S.receipts[id]){showReceipt(Object.assign({},S.receipts[id]),false);return}
+  S.db.doc('receipts/'+id).get().then(function(d){
+    if(!d.exists)return toast('אין טופס חתימה שמור לתנועה הזו');
+    showReceipt(Object.assign({id:id},d.data()),false);
+  }).catch(function(){toast('טעינת הטופס נכשלה')});
+}
+function rcPng(){
+  var rc=RC; if(!rc)return;
+  var lines=rc.lines||[], n=Math.max(10,lines.length);
+  var W=1000, M0=30, RH=40, HDR=46;
+  var H=60+90+20+HDR+n*RH+(rc.notes?44:0)+330+(rc.signature?180:40);
+  var cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  var x=cv.getContext('2d');
+  var F='Heebo, Arial, sans-serif', R=W-M0;
+  x.fillStyle='#fff'; x.fillRect(0,0,W,H); x.fillStyle='#000'; x.strokeStyle='#000'; x.direction='rtl'; x.lineWidth=2;
+  function txt(s,xr,y,font,al){x.font=font;x.textAlign=al||'right';x.fillText(String(s),xr,y)}
+  var y=30;
+  x.strokeRect(M0,y,W-2*M0,64); txt(UNIT_NAME,W/2,y+43,'800 34px '+F,'center'); y+=64+46;
+  txt('טופס 1008',W/2,y,'700 26px '+F,'center'); var tw=x.measureText('טופס 1008').width; x.lineWidth=1.5; x.beginPath(); x.moveTo(W/2-tw/2,y+6); x.lineTo(W/2+tw/2,y+6); x.stroke(); y+=36;
+  txt(rcFormTitle(rc.type),W/2,y,'700 24px '+F,'center'); y+=48;
+  var f='400 20px '+F, xr=R;
+  [['תאריך: ',rcDate(rc.ts)],['גדוד: ',UNIT_NO],['פלוגה: ',rc.soldierCompany||''],['נייד: ',rc.soldierPhone||'']].forEach(function(p){
+    txt(p[0],xr,y,f); xr-=x.measureText(p[0]).width; txt(p[1],xr,y,'700 20px '+F); xr-=x.measureText(p[1]).width+34;
+  });
+  y+=22;
+  var cols=[['מס״ד',64],['מק״ט',150],['שם הפריט',430],['כמות',80],['הערות',216]]; /* right to left */
+  x.lineWidth=1.5;
+  var xs=[R]; cols.forEach(function(c){xs.push(xs[xs.length-1]-c[1])});
+  x.fillStyle='#e4e4e4'; x.fillRect(xs[xs.length-1],y,R-xs[xs.length-1],HDR); x.fillStyle='#000';
+  cols.forEach(function(c,i){x.strokeRect(xs[i+1],y,c[1],HDR);txt(c[0],xs[i]-c[1]/2,y+31,'700 20px '+F,'center')});
+  y+=HDR;
+  for(var r=0;r<n;r++){
+    var l=lines[r];
+    cols.forEach(function(c,i){x.strokeRect(xs[i+1],y,c[1],RH)});
+    txt(r+1,xs[0]-32,y+28,'400 18px '+F,'center');
+    if(l){
+      txt(l.sku||'',xs[1]-8,y+28,'400 18px '+F);
+      txt(l.name,xs[2]-8,y+28,'400 20px '+F);
+      txt(l.qty,xs[3]-40,y+28,'700 20px '+F,'center');
+      txt(rcLineNote(l),xs[4]-8,y+28,'400 16px '+F);
+    }
+    y+=RH;
+  }
+  y+=34;
+  if(rc.notes){txt('הערות כלליות: '+rc.notes,R,y,'400 18px '+F);y+=44}
+  txt('פרטי האפסנאי המנפק',R,y,'700 20px '+F); x.lineWidth=1; x.beginPath(); x.moveTo(M0,y+8); x.lineTo(R,y+8); x.stroke(); y+=40;
+  txt('שם: '+(rc.signerName||''),R,y,'400 20px '+F); y+=56;
+  txt('פרטי החייל המקבל',R,y,'700 20px '+F); x.beginPath(); x.moveTo(M0,y+8); x.lineTo(R,y+8); x.stroke(); y+=40;
+  txt('מ״א: '+rc.soldierId+'   ·   שם: '+rc.soldierName,R,y,'400 20px '+F); y+=40;
+  txt(rcStatement(rc.type),R,y,'400 19px '+F); y+=44;
+  function finish(){
+    txt('הופק במערכת ניהול מלאי ושלישות',W/2,H-14,'400 14px '+F,'center');
+    cv.toBlob(function(b){
+      Promise.resolve(DL).then(function(dl){
+        if(!dl)return toast('הורדת קבצים לא זמינה בתצוגה הזו');
+        dl.save({filename:'טופס-'+rc.soldierId+'-'+stamp8()+'.png',data:b}).then(function(){toast('הטופס נשמר')}).catch(function(e){if(!e||e.code!=='declined')toast('השמירה נכשלה')});
+      });
+    },'image/png');
+  }
+  if(rc.signature){
+    var im=new Image();
+    im.onload=function(){txt('חתימה:',R,y+30,'400 20px '+F);var w=Math.min(300,im.width),h=im.height*w/im.width;var px=R-90-w;x.drawImage(im,px,y,w,h);x.lineWidth=1;x.strokeRect(px,y,w,h);finish()};
+    im.onerror=finish;
+    im.src=rc.signature;
+  }else finish();
+}
+
+/* ---------- equipment sets ---------- */
+var T=null;
+function setIds(){return Object.keys(S.sets).sort(function(a,b){return String(S.sets[a].name).localeCompare(String(S.sets[b].name),'he')})}
+function nextSetId(){var n=0;Object.keys(S.sets).forEach(function(k){var m=/(\d+)$/.exec(k);if(m)n=Math.max(n,+m[1])});return 'SET-'+String(n+1).padStart(3,'0')}
+function saveSet(id,doc){
+  var prev=S.sets[id];
+  S.sets[id]=Object.assign({id:id},doc);
+  return S.db.doc('sets/'+id).set(doc).catch(function(e){if(prev)S.sets[id]=prev;else delete S.sets[id];throw e});
+}
+function openSets(){T={sel:setIds()[0]||'',q:''};renderSets()}
+function setItemsHtml(){
+  var set=S.sets[T.sel]; if(!set)return '';
+  var items=set.items||{}, ids=Object.keys(items);
+  if(!ids.length)return '<p class="empty">הסט ריק. חפש פריט למטה והוסף אותו.</p>';
+  return ids.map(function(iid){
+    var it=S.inventory[iid];
+    return '<div class="sr"><div><b>'+esc(it?it.name:'פריט שנמחק מהקטלוג')+'</b>'+(it?' <span class="tag '+(it.domain==='נשקייה'?'crit':'warn')+'">'+esc(it.domain)+'</span>':'')+'</div><div class="acts"><input type="number" min="1" inputmode="numeric" class="qty" data-chg="tQty" data-id="'+esc(iid)+'" value="'+esc(items[iid])+'" aria-label="כמות"><button type="button" class="btn danger sm" data-act="tRemove" data-id="'+esc(iid)+'">הסרה</button></div></div>';
+  }).join('');
+}
+function setSearchHtml(){
+  var set=S.sets[T.sel]; if(!set)return '';
+  var q=(T.q||'').trim();
+  if(!q)return '<p class="note">הקלד שם פריט או קטגוריה כדי להוסיף לסט.</p>';
+  var items=Object.keys(S.inventory).map(function(k){return S.inventory[k]}).filter(function(i){
+    return !(set.items&&set.items[i.id]!==undefined)&&hit(q,[i.name,i.category,i.domain]);
+  }).sort(function(a,b){return String(a.name).localeCompare(String(b.name),'he')}).slice(0,8);
+  if(!items.length)return '<p class="note">לא נמצאו פריטים להוספה.</p>';
+  return '<div class="sugs">'+items.map(function(i){
+    return '<button type="button" class="sug" data-act="tAdd" data-id="'+esc(i.id)+'"><b>'+esc(i.name)+'</b><span class="meta"><span>'+esc(i.domain)+'</span><span>'+esc(i.category||'')+'</span></span></button>';
+  }).join('')+'</div>';
+}
+function tRefresh(){var a=$('#tItems'),b=$('#tRes');if(a)a.innerHTML=setItemsHtml();if(b)b.innerHTML=setSearchHtml()}
+function renderSets(){
+  var ids=setIds();
+  if(!S.sets[T.sel])T.sel=ids[0]||'';
+  modal(dlgHead('ניהול סטים','<span>סט הוא רשימת פריטים וכמויות שמחתימים בלחיצה אחת.</span>')+
+    '<div class="body"><div class="bar"><input id="tNew" placeholder="שם סט חדש, למשל: סט לוחם" maxlength="40" aria-label="שם סט חדש" style="flex:1 1 180px;min-width:0"><button type="button" class="btn sm" data-act="tCreate">יצירת סט</button></div>'+
+    (ids.length
+      ?'<label class="f">הסט לעריכה<select id="tSel" data-chg="tSel">'+ids.map(function(id){return '<option value="'+esc(id)+'"'+(id===T.sel?' selected':'')+'>'+esc(S.sets[id].name)+'</option>'}).join('')+'</select></label>'+
+       '<div class="bar"><input id="tRename" value="'+esc(S.sets[T.sel]?S.sets[T.sel].name:'')+'" maxlength="40" aria-label="שם הסט" style="flex:1 1 160px;min-width:0"><button type="button" class="btn ghost sm" data-act="tRenameGo">שמירת שם</button><button type="button" class="btn danger sm" data-act="tDel">מחיקת סט</button></div>'+
+       '<div><b style="font-size:13px">פריטים בסט</b><div class="list" id="tItems" style="margin-top:6px">'+setItemsHtml()+'</div></div>'+
+       '<div><b style="font-size:13px">הוספת פריט לסט</b><input id="tq" type="search" data-inp="tq" placeholder="חיפוש פריט בקטלוג" value="'+esc(T.q||'')+'" aria-label="חיפוש פריט" style="width:100%;margin-top:6px"><div id="tRes">'+setSearchHtml()+'</div></div>'
+      :'<p class="empty">עדיין אין סטים. הקלד שם ולחץ "יצירת סט".</p>')+
+    '<p class="err" id="err" role="alert"></p></div><footer><button type="button" class="btn" data-act="close">סיום</button></footer>');
+}
+async function tCreate(){
+  var v=$('#tNew').value.trim();
+  if(!v)return stampErr('נא להקליד שם לסט');
+  if(setIds().some(function(id){return S.sets[id].name===v}))return stampErr('סט בשם הזה כבר קיים');
+  var id=nextSetId();
+  try{await saveSet(id,{name:v,items:{}});T.sel=id;T.q='';renderSets();toast('הסט נוצר')}
+  catch(e){stampErr('השמירה נכשלה. ניהול סטים דורש הרשאת עורך.')}
+}
+async function tRenameGo(){
+  var set=S.sets[T.sel]; if(!set)return;
+  var v=($('#tRename').value||'').trim();
+  if(!v||v===set.name)return;
+  if(setIds().some(function(id){return id!==T.sel&&S.sets[id].name===v}))return stampErr('סט בשם הזה כבר קיים');
+  try{await saveSet(T.sel,{name:v,items:Object.assign({},set.items||{})});renderSets();toast('השם עודכן')}
+  catch(e){stampErr('השמירה נכשלה. ניהול סטים דורש הרשאת עורך.')}
+}
+async function tDel(t){
+  var id=T.sel; if(!S.sets[id])return;
+  if(!t.dataset.sure){t.dataset.sure='1';t.textContent='לחץ שוב למחיקה סופית';stampErr('הסט יימחק. ההחתמות שכבר נעשו לא יושפעו.');return}
+  t.disabled=true;
+  try{await S.db.doc('sets/'+id).delete();delete S.sets[id];T.sel=setIds()[0]||'';T.q='';renderSets();toast('הסט נמחק')}
+  catch(e){t.disabled=false;stampErr('המחיקה נכשלה. ניהול סטים דורש הרשאת עורך.')}
+}
+function tChange(fn){
+  var set=S.sets[T.sel]; if(!set)return;
+  var items=Object.assign({},set.items||{});
+  fn(items);
+  var p=saveSet(T.sel,{name:set.name,items:items});
+  tRefresh();
+  p.catch(function(){tRefresh();stampErr('השמירה נכשלה. ניהול סטים דורש הרשאת עורך.')});
+}
+
+/* ---------- inventory groups ---------- */
+async function saveConfig(patch){
+  var prev=S.config;
+  S.config=Object.assign({},prev||{},patch);
+  try{await S.db.doc('config/main').set(S.config)}catch(e){S.config=prev;throw e}
+}
+function allGroups(){
+  var g=((S.config&&S.config.groups)||[]).slice();
+  Object.keys(S.inventory).forEach(function(k){var x=S.inventory[k].group;if(x&&g.indexOf(x)<0)g.push(x)});
+  return g;
+}
+function groupDomain(g){
+  var m=S.config&&S.config.groupDomains;
+  if(m&&m[g])return m[g];
+  var ds={};
+  Object.keys(S.inventory).forEach(function(k){var i=S.inventory[k];if(i.group===g)ds[i.domain]=1});
+  var ks=Object.keys(ds);
+  return ks.length===1?ks[0]:'';
+}
+function groupsOf(domain){return allGroups().filter(function(g){var d=groupDomain(g);return !d||d===domain})}
+function groupOptions(domain,sel){return '<option value="">ללא קבוצה</option>'+groupsOf(domain).map(function(g){return '<option value="'+esc(g)+'"'+(g===sel?' selected':'')+'>'+esc(g)+'</option>'}).join('')}
+function groupSelect(){
+  var gs=allGroups().filter(function(g){var d=groupDomain(g);return S.invDom==='ALL'||!d||d===S.invDom}); if(!gs.length)return '';
+  return '<select id="ig" data-chg="ig" aria-label="קבוצה"><option value="ALL">כל הקבוצות</option>'+gs.map(function(g){return '<option value="'+esc(g)+'"'+(S.invGroup===g?' selected':'')+'>'+esc(g)+'</option>'}).join('')+'<option value="NONE"'+(S.invGroup==='NONE'?' selected':'')+'>ללא קבוצה</option></select>';
+}
+function openGroups(){G={sel:allGroups()[0]||'',q:'',dom:(DOMAINS.indexOf(S.invDom)>=0?S.invDom:DOMAINS[0])};renderGroups()}
+function groupCount(){return Object.keys(S.inventory).filter(function(k){return S.inventory[k].group===G.sel}).length}
+function groupPicks(){
+  if(!G.sel)return '<p class="empty" style="border:0">בחר קבוצה כדי לשייך אליה פריטים.</p>';
+  var gd=groupDomain(G.sel);
+  var items=Object.keys(S.inventory).map(function(k){return S.inventory[k]}).filter(function(i){return (!gd||i.domain===gd)&&hit(G.q,[i.name,i.category,i.domain])}).sort(function(a,b){return String(a.name).localeCompare(String(b.name),'he')});
+  if(!items.length)return '<p class="empty" style="border:0">לא נמצאו פריטים.</p>';
+  return items.map(function(i){
+    var on=i.group===G.sel;
+    return '<div class="pick"><label><input type="checkbox" data-chg="gToggle" data-id="'+esc(i.id)+'"'+(on?' checked':'')+'><span><b>'+esc(i.name)+'</b><small>'+esc(i.domain)+' · '+esc(i.category||'')+(i.group&&!on?' · כרגע בקבוצה: '+esc(i.group):'')+'</small></span></label></div>';
+  }).join('');
+}
+function gRefresh(){var p=$('#gPick'),c=$('#gCnt');if(p)p.innerHTML=groupPicks();if(c)c.textContent=groupCount()}
+function renderGroups(){
+  var gs=allGroups();
+  modal(dlgHead('ניהול קבוצות','<span>קבוצה היא אוסף פריטים שאתה מגדיר. כל פריט שייך לקבוצה אחת.</span>')+
+    '<div class="body"><div class="bar"><select id="gDom" data-chg="gDom" aria-label="תחום הקבוצה">'+DOMAINS.map(function(d){return '<option'+(d===G.dom?' selected':'')+'>'+d+'</option>'}).join('')+'</select><input id="gNew" placeholder="שם קבוצה חדשה" maxlength="40" aria-label="שם קבוצה חדשה" style="flex:1 1 160px;min-width:0"><button type="button" class="btn sm" data-act="gAdd">יצירת קבוצה</button></div>'+
+    (gs.length
+      ?'<label class="f">הקבוצה לעריכה<select id="gSel" data-chg="gSel">'+gs.map(function(g){return '<option value="'+esc(g)+'"'+(g===G.sel?' selected':'')+'>'+esc(g)+(groupDomain(g)?' · '+esc(groupDomain(g)):'')+'</option>'}).join('')+'</select></label>'+
+       '<div class="bar"><input id="gRename" value="'+esc(G.sel)+'" maxlength="40" aria-label="שם הקבוצה" style="flex:1 1 160px;min-width:0"><button type="button" class="btn ghost sm" data-act="gRename">שמירת שם</button><button type="button" class="btn danger sm" data-act="gDel">מחיקת קבוצה</button></div>'+
+       '<div><b style="font-size:13px">פריטים בקבוצה "'+esc(G.sel)+'" (<span id="gCnt">'+groupCount()+'</span>)</b><p class="note">מוצגים רק פריטים מתחום '+esc(groupDomain(G.sel)||'כל התחומים')+', כדי שאפסנאות ונשקייה לא יתערבבו. סמן כדי להוסיף לקבוצה והסר סימון כדי להוציא. השינוי נשמר מיד.</p><input id="gq" type="search" data-inp="gq" placeholder="חיפוש פריט" value="'+esc(G.q)+'" aria-label="חיפוש פריט" style="width:100%"><div class="picks" id="gPick" style="margin-top:6px">'+groupPicks()+'</div></div>'
+      :'<p class="empty">עדיין אין קבוצות. הקלד שם ולחץ "יצירת קבוצה".</p>')+
+    '<p class="err" id="err" role="alert"></p></div><footer><button type="button" class="btn" data-act="close">סיום</button></footer>');
+}
+async function gAdd(){
+  var v=$('#gNew').value.trim();
+  if(!v)return stampErr('נא להקליד שם לקבוצה');
+  if(allGroups().indexOf(v)>=0)return stampErr('קבוצה בשם הזה כבר קיימת');
+  var dom=$('#gDom').value, gdm=Object.assign({},(S.config&&S.config.groupDomains)||{});
+  gdm[v]=dom;
+  try{await saveConfig({groups:allGroups().concat([v]),groupDomains:gdm});G.sel=v;G.q='';renderGroups();toast('הקבוצה נוצרה')}
+  catch(e){stampErr('השמירה נכשלה. ניהול קבוצות דורש הרשאת עורך.')}
+}
+async function gRename(){
+  var old=G.sel, nv=($('#gRename').value||'').trim();
+  if(!old||nv===old)return;
+  if(!nv)return stampErr('שם הקבוצה לא יכול להיות ריק');
+  if(allGroups().indexOf(nv)>=0)return stampErr('קבוצה בשם הזה כבר קיימת');
+  try{
+    var gd2=Object.assign({},(S.config&&S.config.groupDomains)||{}), dm=groupDomain(old);
+    delete gd2[old]; if(dm)gd2[nv]=dm;
+    await saveConfig({groups:allGroups().map(function(g){return g===old?nv:g}),groupDomains:gd2});
+    var ids=Object.keys(S.inventory).filter(function(k){return S.inventory[k].group===old});
+    for(var j=0;j<ids.length;j++){S.inventory[ids[j]].group=nv;await S.db.doc('inventory/'+ids[j]).update({group:nv})}
+    G.sel=nv;renderGroups();toast('שם הקבוצה עודכן');
+  }catch(e){stampErr('השמירה נכשלה. ניהול קבוצות דורש הרשאת עורך.')}
+}
+async function gDel(t){
+  var old=G.sel; if(!old)return;
+  if(!t.dataset.sure){t.dataset.sure='1';t.textContent='לחץ שוב למחיקה סופית';stampErr('הקבוצה תימחק והפריטים שלה יישארו בקטלוג ללא קבוצה.');return}
+  t.disabled=true;
+  try{
+    var ids=Object.keys(S.inventory).filter(function(k){return S.inventory[k].group===old});
+    for(var j=0;j<ids.length;j++){S.inventory[ids[j]].group='';await S.db.doc('inventory/'+ids[j]).update({group:''})}
+    var gd3=Object.assign({},(S.config&&S.config.groupDomains)||{}); delete gd3[old];
+    await saveConfig({groups:allGroups().filter(function(g){return g!==old}),groupDomains:gd3});
+    G.sel=allGroups()[0]||'';G.q='';renderGroups();toast('הקבוצה נמחקה');
+  }catch(e){t.disabled=false;stampErr('המחיקה נכשלה. ניהול קבוצות דורש הרשאת עורך.')}
+}
+
+/* ---------- soldier / item forms ---------- */
+var SF=null;
+function openSoldierForm(id){
+  SF=(typeof id==='string'&&S.soldiers[id])?id:null;
+  var s=SF?S.soldiers[SF]:{name:'',idNumber:'',zehuNumber:'',company:'',squad:'',phone:''};
+  var cos=allCompanies().slice(); if(s.company&&cos.indexOf(s.company)<0)cos.push(s.company);
+  modal(dlgHead(SF?'עריכת חייל':'הוספת חייל')+'<form id="fSoldier"><div class="body">'+
+    '<div class="grid2"><label class="f">מספר אישי (מ״א) *<input id="fId" required dir="ltr" placeholder="1234567" value="'+esc(SF||'')+'"'+(SF?' readonly':'')+'></label><label class="f">תעודת זהות<input id="fIdn" dir="ltr" value="'+esc(s.idNumber||'')+'"></label></div>'+
+    '<div class="grid2"><label class="f">שם מלא *<input id="fName" required value="'+esc(s.name||'')+'"></label><label class="f">מספר זהו<input id="fZehu" dir="ltr" value="'+esc(s.zehuNumber||'')+'"></label></div>'+
+    '<div class="grid2"><label class="f">פלוגה<select id="fCo">'+cos.map(function(c){return '<option'+(c===s.company?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></label><label class="f">מחלקה / צוות<input id="fSquad" value="'+esc(s.squad||'')+'"></label></div>'+
+    '<label class="f">טלפון<input id="fPhone" dir="ltr" inputmode="tel" value="'+esc(s.phone||'')+'"></label>'+(SF?'<p class="note">המספר האישי לא ניתן לשינוי. אם הוא שגוי, מחק את החייל והוסף מחדש.</p>':'')+'<p class="err" id="err" role="alert"></p></div>'+
+    '<footer>'+(SF&&can('manageSoldiers')?'<button type="button" class="btn danger" data-act="delSoldier" style="margin-inline-end:auto">מחיקת חייל</button>':'')+'<button type="button" class="btn ghost" data-act="close">ביטול</button><button type="submit" class="btn" id="fGo">שמירה</button></footer></form>');
+}
+async function delSoldier(t){
+  var id=SF; if(!id||!S.soldiers[id])return;
+  var h=heldItems(id);
+  if(holdsAny(id))return stampErr(canSeeDetail()?'אי אפשר למחוק חייל שחתום על ציוד ('+h.reduce(function(a,x){return a+x.count},0)+' פריטים). זכה אותו קודם.':'אי אפשר למחוק חייל שחתום על ציוד. פנה ללוגיסטיקה לזיכוי.');
+  if(!t.dataset.sure){t.dataset.sure='1';t.textContent='לחץ שוב למחיקה סופית';stampErr('החייל יימחק מהרשימה. התנועות שלו יישארו ביומן.');return}
+  t.disabled=true;
+  try{
+    await S.db.doc('soldiers/'+id).delete();
+    S.db.doc('status/'+id).delete().catch(function(){});
+    closeModal(); toast('החייל נמחק');
+  }catch(e){t.disabled=false;stampErr('המחיקה נכשלה. מחיקת חיילים דורשת הרשאת עורך.')}
+}
+async function submitSoldier(){
+  var id=$('#fId').value.trim(), name=$('#fName').value.trim();
+  if(!id||!name)return stampErr('נא למלא מספר אישי ושם');
+  if(!/^[A-Za-z0-9_.:@+~-]{1,60}$/.test(id))return stampErr('מספר אישי: ספרות ואותיות באנגלית בלבד');
+  if(SF)id=SF;
+  else if(S.soldiers[id])return stampErr('מספר אישי זה כבר קיים');
+  $('#fGo').disabled=true;
+  try{
+    await S.db.doc('soldiers/'+id).set({name:name,idNumber:$('#fIdn').value.trim(),zehuNumber:$('#fZehu').value.trim(),company:$('#fCo').value,squad:$('#fSquad').value.trim(),phone:$('#fPhone').value.trim()});
+    closeModal(); toast(SF?'החייל עודכן':'החייל נשמר');
+  }catch(e){$('#fGo').disabled=false;stampErr('השמירה נכשלה. הוספת חיילים דורשת הרשאת עורך.')}
+}
+var IW=[];
+function iwHtml(){
+  return IW.map(function(r,n){return '<div class="crow w"><input data-inp="iwSerial" data-i="'+n+'" value="'+esc(r.serial)+'" placeholder="צ&#39; נשק" dir="ltr" maxlength="40" aria-label="צ&#39; נשק"><input data-inp="iwNo" data-i="'+n+'" value="'+esc(r.wno)+'" placeholder="מספר נשק (אופציונלי)" maxlength="60" aria-label="מספר נשק"><button type="button" class="btn ghost sm" data-act="iwDel" data-i="'+n+'">הסרה</button></div>'}).join('')+'<button type="button" class="btn ghost sm" data-act="iwAdd" style="margin-top:8px">+ נשק נוסף</button>';
+}
+function openItemForm(id){
+  F=id?S.inventory[id]:null;
+  var i=F||{name:'',domain:'אפסנאות',category:CATS[0],total:10};
+  var wp=i.domain==='נשקייה', tr=wp&&i.serialTrack!==false;
+  IW=[{serial:'',wno:''}];
+  modal(dlgHead(F?'עריכת פריט':'פריט חדש')+'<form id="fItem"><div class="body">'+
+    '<label class="f">תחום<select id="iDom" data-chg="iDom">'+DOMAINS.map(function(d){return '<option'+(i.domain===d?' selected':'')+'>'+d+'</option>'}).join('')+'</select></label>'+
+    '<label class="f">שם הפריט *<input id="iName" required value="'+esc(i.name)+'"></label>'+
+    '<label class="f">מק״ט (אופציונלי)<input id="iSku" dir="ltr" maxlength="30" value="'+esc(i.sku||'')+'"></label>'+
+    '<div class="grid2"><label class="f">קטגוריה<select id="iCat">'+CATS.map(function(c){return '<option'+(i.category===c?' selected':'')+'>'+esc(c)+'</option>'}).join('')+'</select></label>'+
+    '<label class="f" id="iTotWrap">מלאי כולל *<input id="iTot" type="number" min="0" inputmode="numeric" required value="'+esc(i.total)+'"></label></div>'+
+    '<label class="att" id="iTrackWrap"'+(wp?'':' hidden')+' style="margin:0"><input type="checkbox" id="iTrack" data-chg="iTrack"'+(i.serialTrack!==false?' checked':'')+'> הפריט נושא צ&#39; נשק (מעקב אחרי כל נשק ובדיקות דיוק)</label>'+
+    '<div id="iWpWrap"'+(tr?'':' hidden')+'><b style="font-size:13px">נשקים להוספה למלאי</b><p class="note">הוסף כל נשק עם הצ&#39; שלו. הוא נשמר במאגר הנשקים, והמספר שהוספת מתווסף למספר שבשדה "מלאי כולל" למעלה. שיוך לחייל ואפסון נעשים בלשונית מאגר נשקים.</p><div class="list" id="iWpRows">'+iwHtml()+'</div></div>'+
+    '<label class="f">התראת מלאי נמוך<input id="iLow" type="number" min="0" inputmode="numeric" placeholder="ריק = בלי התראה" value="'+esc(i.lowStock==null?'':i.lowStock)+'"></label>'+
+    '<label class="f">קבוצה (רק מאותו תחום)<select id="iGrp">'+groupOptions(i.domain,i.group)+'</select></label>'+
+    '<p class="err" id="err" role="alert"></p></div><footer>'+(F&&can('manageInventory')?'<button type="button" class="btn danger" id="iDel" data-act="delItem" style="margin-inline-end:auto">מחיקת פריט</button>':'')+'<button type="button" class="btn ghost" data-act="close">ביטול</button><button type="submit" class="btn" id="iGo">שמירה</button></footer></form>');
+}
+async function submitItem(){
+  var name=$('#iName').value.trim();
+  if(!name)return stampErr('נא למלא שם פריט');
+  var gv=$('#iGrp').value, dv=$('#iDom').value, isW=dv==='נשקייה'&&$('#iTrack').checked;
+  if(gv&&groupDomain(gv)&&groupDomain(gv)!==dv)return stampErr('הקבוצה "'+gv+'" שייכת לתחום '+groupDomain(gv)+'. אי אפשר לערבב תחומים.');
+  var id=F?F.id:(function(){var n=0;Object.keys(S.inventory).forEach(function(k){var m=/(\d+)$/.exec(k);if(m)n=Math.max(n,+m[1])});return 'ITM-'+String(n+1).padStart(3,'0')})();
+  var tot=parseInt($('#iTot').value,10), rows=[];
+  if(isW){
+    var seenS={},seenN={};
+    for(var r=0;r<IW.length;r++){
+      var s=nz(IW[r].serial), n=nz(IW[r].wno);
+      if(!s&&!n)continue;
+      if((s&&seenS[s.toLowerCase()])||(n&&seenN[n.toLowerCase()])||wpDup(id,s,n,''))return stampErr("הצ' או מספר הנשק "+(s||n)+' כבר קיימים');
+      if(s)seenS[s.toLowerCase()]=1;
+      if(n)seenN[n.toLowerCase()]=1;
+      rows.push({serial:s,weaponNo:n});
+    }
+    tot=(tot||0)+rows.length;
+  }
+  if(!(tot>=0))return stampErr('מלאי כולל לא תקין');
+  if(F&&tot<issuedOf(F.id))return stampErr('המלאי הכולל נמוך ממה שמוחתם כרגע ('+issuedOf(F.id)+')');
+  $('#iGo').disabled=true;
+  try{
+    var lowv=$('#iLow').value.trim();
+    await S.db.doc('inventory/'+id).set({name:name,domain:dv,category:$('#iCat').value,total:tot,group:gv,serialTrack:dv==='נשקייה'?$('#iTrack').checked:true,sku:nz($('#iSku').value),lowStock:lowv===''?'':Math.max(0,parseInt(lowv,10)||0)});
+  }catch(e){$('#iGo').disabled=false;return stampErr('השמירה נכשלה. ניהול הקטלוג דורש הרשאת עורך.')}
+  var done=0;
+  try{
+    for(var j=0;j<rows.length;j++){
+      await S.db.collection('weapons').add({itemId:id,serial:rows[j].serial,weaponNo:rows[j].weaponNo,soldierId:'',apson:false,assignedAt:'',by:S.uid,at:new Date().toISOString()});
+      done++;
+    }
+  }catch(e){
+    $('#iGo').disabled=false;
+    return stampErr('הפריט נשמר אבל רק '+done+' מתוך '+rows.length+' נשקים נוספו. בדוק בניהול נשקים. (המלאי הכולל עודכן לפי כולם, אפשר לתקן בעריכה.)');
+  }
+  closeModal(); toast(rows.length?'הפריט נשמר ונוספו '+rows.length+' נשקים':'הפריט נשמר');
+}
+
+/* ---------- edit a stamp ---------- */
+var E=null;
+function canEditTx(t){return can('stamp')&&(S.owner||can('manageInventory')||t.by===S.uid)}
+function txKey(o){return (o.serial?'s:'+o.serial:'w:'+o.weaponNo)}
+function openTxEdit(id){
+  var t=S.transactions[id]; if(!t||!canEditTx(t))return;
+  E={id:id};
+  var comp=t.scope==='company', wp=!!(t.serial||t.weaponNo), it=S.inventory[t.itemId];
+  var who=comp?t.company:((S.soldiers[t.soldierId]||{}).name||t.soldierId);
+  var iname=it?it.name:(t.itemName||t.itemId);
+  modal(dlgHead('עריכת '+(t.type==='issue'?'החתמה':'זיכוי'),'<span>'+esc(who)+'</span><span>'+esc(fmt(t.ts))+'</span>')+
+    '<div class="body"><div class="panel" style="background:var(--bg)"><b>'+esc(iname)+'</b>'+(wp?'':' <span class="muted">× '+esc(t.quantity)+'</span>')+'</div>'+
+    (wp
+      ?'<label class="f">צ&#39; נשק<input id="eSerial" dir="ltr" maxlength="40" value="'+esc(t.serial||'')+'"></label><label class="f">מספר נשק<input id="eNo" maxlength="60" value="'+esc(t.weaponNo||'')+'"></label>'
+      :'<label class="f">כמות<input id="eQty" type="number" min="1" inputmode="numeric" value="'+esc(t.quantity)+'"></label>')+
+    (comp&&!t.itemId?'<label class="f">שם הפריט<input id="eName" maxlength="80" value="'+esc(t.itemName||'')+'"></label>':'')+
+    '<label class="f">'+(t.type==='issue'?'שם המחתים':'שם המזכה')+' *<input id="eSigner" maxlength="60" value="'+esc(t.signerName||'')+'"></label>'+
+    (comp?'<label class="f">שם נציג הפלוגה<input id="eRecv" maxlength="60" value="'+esc(t.receiverName||'')+'"></label>':'')+
+    '<label class="f">הערות<input id="eNotes" maxlength="200" value="'+esc(t.notes||'')+'"></label>'+
+    '<p class="note">העריכה נשמרת ביומן עם שם העורך והערכים הקודמים.</p><p class="err" id="err" role="alert"></p></div>'+
+    '<footer><button type="button" class="btn ghost" data-act="close">ביטול</button><button type="button" class="btn" id="eGo" data-act="txSave">שמירת שינויים</button></footer>');
+}
+function simCheck(id,patch){
+  var orig=S.transactions, t=orig[id], err='';
+  S.transactions=Object.assign({},orig); S.transactions[id]=Object.assign({},t,patch);
+  derive();
+  var ix=S.idx;
+  if(t.scope==='company'){
+    var key=(patch.itemId||t.itemId)||ckey(patch.itemName||t.itemName), ck=ix.cheld[t.company]&&ix.cheld[t.company][key];
+    if(ck&&ck.count<0)err='העריכה תיצור מצב לא תקין: על הפלוגה יירשמו פחות יחידות ממה שזוכה.';
+  }else{
+    var hh=ix.held[t.soldierId]&&ix.held[t.soldierId][t.itemId];
+    if(hh<0)err='העריכה תיצור מצב לא תקין: על החייל יירשמו פחות יחידות ממה שזוכה.';
+  }
+  var inv=S.inventory[t.itemId];
+  if(!err&&inv&&(ix.issued[t.itemId]||0)>(Number(inv.total)||0))err='העריכה תחרוג מהמלאי הכולל של "'+inv.name+'".';
+  S.transactions=orig; derive();
+  return err;
+}
+async function txSave(){
+  var t=S.transactions[E&&E.id]; if(!t||!canEditTx(t))return;
+  var comp=t.scope==='company', wp=!!(t.serial||t.weaponNo);
+  var patch={signerName:nz($('#eSigner').value).slice(0,60),notes:nz($('#eNotes').value).slice(0,200)};
+  if(!patch.signerName)return stampErr('נא למלא שם');
+  if(comp){patch.receiverName=nz($('#eRecv').value).slice(0,60);if(!t.itemId){var nm=nz($('#eName').value);if(!nm)return stampErr('נא למלא שם פריט');patch.itemName=nm.slice(0,80)}}
+  var group=[];
+  if(wp){
+    var s=nz($('#eSerial').value), n=nz($('#eNo').value);
+    if(!s&&!n)return stampErr("חייב להישאר לפחות צ' או מספר נשק");
+    if(s!==nz(t.serial)||n!==nz(t.weaponNo)){
+      var oldKey=txKey(t);
+      Object.keys(S.transactions).forEach(function(k){
+        var o=S.transactions[k];
+        if(k!==E.id&&o.itemId===t.itemId&&(o.serial||o.weaponNo)&&txKey(o)===oldKey)group.push(k);
+      });
+      var clash=Object.keys(S.transactions).some(function(k){
+        var o=S.transactions[k];
+        if(k===E.id||group.indexOf(k)>=0||!(o.serial||o.weaponNo))return false;
+        return (s&&nz(o.serial).toLowerCase()===s.toLowerCase())||(n&&o.itemId===t.itemId&&nz(o.weaponNo).toLowerCase()===n.toLowerCase());
+      });
+      if(clash)return stampErr("הצ' או מספר הנשק כבר בשימוש בנשק אחר");
+      var reg=wpFind(t.itemId,s,n);
+      if(reg.err)return stampErr(reg.err);
+      patch.serial=s; patch.weaponNo=n;
+    }
+  }else{
+    var q=Number($('#eQty').value);
+    if(!(q>=1)||Math.floor(q)!==q)return stampErr('כמות לא תקינה');
+    patch.quantity=q;
+    var e1=simCheck(E.id,patch); if(e1)return stampErr(e1);
+  }
+  var changed=Object.keys(patch).some(function(k){return String(patch[k])!==String(t[k]===undefined?'':t[k])});
+  if(!changed){closeModal();return}
+  var now=new Date().toISOString(), from={};
+  Object.keys(patch).forEach(function(k){from[k]=t[k]===undefined?'':t[k]});
+  var full=Object.assign({},patch,{editedBy:S.uid,editedAt:now,history:(t.history||[]).concat([{at:now,by:S.uid,from:from}])});
+  $('#eGo').disabled=true;
+  try{
+    await S.db.doc('transactions/'+E.id).update(full);
+    for(var g=0;g<group.length;g++)await S.db.doc('transactions/'+group[g]).update({serial:patch.serial,weaponNo:patch.weaponNo});
+    closeModal(); toast('החתימה עודכנה');
+  }catch(err){$('#eGo').disabled=false;stampErr('השמירה נכשלה. בדוק חיבור והרשאות.')}
+}
+
+/* ---------- weapon accuracy checks ---------- */
+function wpItemIssues(i){
+  var reg=wpList(i.id), keys={}, out={mismatch:null,unreg:0,dups:[]};
+  reg.forEach(function(w){keys[wpKey(w)]=1});
+  var U=(S.idx&&S.idx.units)||{};
+  Object.keys(U).forEach(function(k){if(U[k].itemId===i.id&&!keys[k])out.unreg++});
+  if(reg.length!==(Number(i.total)||0))out.mismatch={reg:reg.length,total:Number(i.total)||0};
+  var by={};
+  Object.keys(S.weapons).forEach(function(k){var w=S.weapons[k],s=nz(w.serial).toLowerCase();if(s)(by[s]=by[s]||[]).push(w)});
+  Object.keys(by).forEach(function(s){
+    var l=by[s];
+    if(l.length>1&&l.some(function(w){return w.itemId===i.id}))out.dups.push({serial:l[0].serial,items:l.map(function(w){return (S.inventory[w.itemId]||{}).name||w.itemId})});
+  });
+  return out;
+}
+function wpIssuesHtml(i,withActions){
+  var r=wpItemIssues(i), out=[];
+  if(r.mismatch)out.push('<div class="warnline">'+(r.mismatch.reg?'המלאי הכולל ('+r.mismatch.total+') לא תואם לנשקים הרשומים במאגר ('+r.mismatch.reg+').':'לא הוזנו נשקים למאגר (מלאי כולל: '+r.mismatch.total+').')+(withActions&&can('manageInventory')&&r.mismatch.reg?' <button type="button" class="btn ghost sm" data-act="fixTotal" data-id="'+esc(i.id)+'">עדכון המלאי ל-'+Math.max(r.mismatch.reg,issuedOf(i.id))+'</button>':'')+'</div>');
+  if(r.unreg)out.push('<div class="warnline">'+r.unreg+' נשקים חתומים על חיילים ולא רשומים במאגר.'+(withActions?' <button type="button" class="btn ghost sm" data-act="wpGoto" data-id="'+esc(i.id)+'">פתיחה במאגר</button>':'')+'</div>');
+  r.dups.forEach(function(d){out.push('<div class="warnline">הצ&#39; '+esc(d.serial)+' רשום יותר מפעם אחת ('+esc(d.items.join(', '))+').'+(withActions?' <button type="button" class="btn ghost sm" data-act="wpGoto" data-id="'+esc(i.id)+'" data-q="'+esc(d.serial)+'">פתיחה במאגר</button>':'')+'</div>')});
+  return out.join('');
+}
+function wpAnyIssues(){
+  return weaponItems().some(function(i){var r=wpItemIssues(i);return r.mismatch||r.unreg||r.dups.length});
+}
+
+/* ---------- profile / breakdown ---------- */
+function profileFormsHtml(id){
+  if(!S.loaded.receipts)return '';
+  var arr=Object.keys(S.receipts).map(function(k){return S.receipts[k]}).filter(function(r){return r.soldierId===id}).sort(function(a,b){return String(b.ts).localeCompare(String(a.ts))});
+  return '<div><b style="font-size:13px">טפסי חתימה ('+arr.length+')</b><div class="list" style="margin-top:8px">'+(arr.length?arr.slice(0,20).map(function(r){return '<div class="sr"><span>'+esc(fmt(r.ts))+' · '+(r.type==='issue'?'החתמה':'זיכוי')+' · '+(r.lines||[]).length+' פריטים '+(r.signature?'<span class="pill ok">חתום</span>':'<span class="pill crit">ללא חתימה</span>')+'</span><button class="btn ghost sm" data-act="rcOpen" data-id="'+esc(r.id)+'">פתיחה</button></div>'}).join(''):'<p class="empty">אין טפסים שמורים לחייל.</p>')+'</div></div>';
+}
+function profileHistoryHtml(id){
+  if(!(S.owner||can('viewLog')))return '';
+  var arr=Object.keys(S.transactions).map(function(k){return S.transactions[k]}).filter(function(t){return t.soldierId===id}).sort(function(a,b){return String(b.ts).localeCompare(String(a.ts))});
+  if(!arr.length)return '';
+  return '<div><b style="font-size:13px">היסטוריית תנועות</b><div class="list" style="margin-top:8px">'+arr.slice(0,25).map(function(t){var i=S.inventory[t.itemId];return '<div class="sr"><span>'+esc(fmt(t.ts))+' · '+(t.type==='issue'?'החתמה':'זיכוי')+' · '+esc(i?i.name:(t.itemName||t.itemId))+' × '+esc(t.quantity)+(t.serial?" · צ' "+esc(t.serial):'')+'</span></div>'}).join('')+'</div></div>';
+}
+function openProfile(id){
+  var s=S.soldiers[id]; if(!s)return;
+  var h=heldItems(id), st=statusOf(id);
+  modal(dlgHead('תיק ציוד · '+s.name,'<span class="mono">מ״א '+esc(s.id)+'</span><span class="mono">ת״ז '+esc(s.idNumber||'-')+'</span><span class="mono">זהו '+esc(s.zehuNumber||'-')+'</span>')+
+    '<div class="body"><div class="panel" style="background:var(--bg)"><div style="display:flex;justify-content:space-between"><span class="muted">פלוגה ומחלקה</span><b>'+esc(s.company||'')+' ('+esc(s.squad||'כללי')+')</b></div>'+
+    '<div style="display:flex;justify-content:space-between"><span class="muted">טלפון</span><span dir="ltr">'+esc(s.phone||'לא הוזן')+'</span></div>'+
+    '<div style="display:flex;justify-content:space-between"><span class="muted">סטטוס שלישות</span>'+statusTag(id)+'</div></div>'+
+    '<div><b style="font-size:13px">ציוד ונשק מוחתם כרגע</b><div class="list" style="margin-top:8px">'+(h.length?h.map(function(x){
+      var i=x.item||{};
+      return '<div class="sr"><div><b>'+esc(i.name||x.itemId)+'</b> <span class="tag '+(i.domain==='נשקייה'?'crit':'warn')+'">'+esc(i.domain||'')+'</span><div class="muted" style="font-size:12px">'+esc(i.category||'')+'</div>'+unitLines(id,x.itemId)+'</div><span class="pill warn">'+x.count+' יח׳</span></div>';
+    }).join(''):'<p class="empty">החייל אינו חתום על ציוד כרגע.</p>')+'</div></div>'+assignedHtml(id)+setsStatusHtml(id)+profileFormsHtml(id)+profileHistoryHtml(id)+'</div>'+
+    '<footer>'+(h.length?'<button class="btn ghost" data-act="fileForm" data-id="'+esc(id)+'">יצירת תיק החתמה (טופס מרוכז)</button>':'')+(can('stamp')?'<button class="btn" data-act="stampFor" data-id="'+esc(id)+'">החתמה / זיכוי</button>':'')+'<button class="btn ghost" data-act="close">סגירה</button></footer>');
+}
+function openBreakdown(id){B={id:id,q:''};
+  var it=S.inventory[id]; if(!it)return;
+  modal(dlgHead('פילוח החתמות · '+it.name,'<span class="mono">'+esc(it.id)+'</span><span>מוחתם '+issuedOf(id)+' מתוך '+it.total+'</span>')+
+    '<div class="body"><input id="bkq" type="search" data-inp="bkq" placeholder="חיפוש חייל בפלוגות" aria-label="חיפוש חייל"><div class="list" id="bkList"></div></div><footer><button class="btn ghost" data-act="close">סגירה</button></footer>');
+  renderBk();
+}
+function renderBk(){
+  var q=B.q.trim().toLowerCase();
+  $('#bkList').innerHTML=allCompanies().map(function(c){
+    var rows=Object.keys(S.soldiers).map(function(k){return S.soldiers[k]}).filter(function(s){
+      if(s.company!==c||heldCount(s.id,B.id)<=0)return false;
+      return !q||[s.name,s.id,s.idNumber].some(function(v){return String(v||'').toLowerCase().indexOf(q)>=0});
+    });
+    var tot=rows.reduce(function(a,s){return a+heldCount(s.id,B.id)},0);
+    var cn=companyHeld(c,B.id); tot+=cn;
+    return '<details class="bk"'+(q?' open':'')+'><summary><span>'+esc(c)+' <span class="muted" style="font-weight:400">('+rows.length+' חיילים)</span></span><span class="pill '+(tot?'warn':'info')+'">'+tot+' יח׳</span></summary><div class="in">'+
+      (rows.length?rows.map(function(s){return '<div class="sr"><div><b>'+esc(s.name)+'</b> <span class="mono muted">'+esc(s.id)+'</span><div class="muted" style="font-size:12px">'+esc(s.squad||'כללי')+' · '+STATUS[statusOf(s.id)].t+'</div></div><div class="acts"><span class="pill warn">'+heldCount(s.id,B.id)+' יח׳</span><button class="btn ghost sm" data-act="profile" data-id="'+esc(s.id)+'">תיק חייל</button></div></div>'}).join(''):'<p class="note">אין חיילים חתומים על הפריט בפלוגה זו.</p>')+(cn?'<div class="sr"><div><b>החתמה פלוגתית</b><div class="muted" style="font-size:12px">חתום על הפלוגה כולה</div></div><span class="pill warn">'+cn+' יח׳</span></div>':'')+'</div></details>';
+  }).join('');
+}
+
+/* ---------- actions ---------- */
+async function guard(p,msg){try{await p}catch(e){toast(msg||'הפעולה נכשלה. בדוק חיבור והרשאות.')}}
+var ACT={
+  tab:function(t){S.tab=t.dataset.v;renderTabs();renderView()},
+  stamp:function(){openStamp()},
+  exportSoldiers:function(){xlsxSave('חיילים',[sheetSoldiers(filteredSoldiers())])},
+  exportInventory:function(){
+    if(S.invDom==='COMPANY')xlsxSave('החתמות-פלוגתיות',[sheetCompany()]);
+    else xlsxSave('מלאי',[sheetInventory(S._invItems||allItemsList())]);
+  },
+  exportWeapons:function(){xlsxSave('נשקים',[sheetWeapons(S._wpRows||registryRows())])},
+  exportForms:function(){xlsxSave('טפסי-חתימה',[sheetForms(S._formsArr||formsList())])},
+  exportLog:function(){xlsxSave('תנועות',[sheetLog(S._logArr||allLogList())])},
+  exportAll:function(){xlsxSave('גיבוי-מלא',[sheetSoldiers(allSoldiersList()),sheetInventory(allItemsList()),sheetWeapons(registryRows()),sheetCompany(),sheetSets(),sheetLog(allLogList())])},
+  sigClear:function(){PAD.clear()},
+  sigSave:sigSave,
+  sigSkip:sigSkip,
+  rcOpen:function(t){rcOpen(t.dataset.id)},
+  fileForm:function(t){
+    var id=t.dataset.id, s=S.soldiers[id]; if(!s)return;
+    var lines=[];
+    heldItems(id).forEach(function(x){
+      var i=x.item||{}, us=unitsHeldBy(id,x.itemId);
+      if(us.length&&isTracked(i))us.forEach(function(u){lines.push({name:i.name||x.itemId,sku:i.sku||'',qty:1,serial:u.serial||'',weaponNo:u.weaponNo||''})});
+      else lines.push({name:i.name||x.itemId,sku:i.sku||'',qty:x.count});
+    });
+    var rc={id:'file-'+id+'-'+Date.now(),type:'file',ts:new Date().toISOString(),soldierId:id,soldierName:s.name,soldierCompany:s.company||'',soldierPhone:s.phone||'',signerName:nameOf(S.uid),notes:'תיק החתמה מרוכז: מצב הציוד הנוכחי',lines:lines,txIds:[]};
+    closeModal(); showReceipt(rc,false);
+  },
+  rcPng:rcPng,
+  signOut:function(){firebase.auth().signOut().then(function(){location.reload()})},
+  stampFor:function(t){closeModal();openStamp(t.dataset.id)},
+  profile:function(t){if(!canSeeDetail())return;closeModal();openProfile(t.dataset.id)},
+  addSoldier:function(){openSoldierForm()},
+  editSoldier:function(t){if(can('manageSoldiers'))openSoldierForm(t.dataset.id)},
+  delSoldier:delSoldier,
+  txEdit:function(t){openTxEdit(t.dataset.id)},
+  txSave:txSave,
+  fixTotal:function(t){var i=S.inventory[t.dataset.id];if(!i)return;var r=wpList(i.id).length;guard(S.db.doc('inventory/'+i.id).update({total:Math.max(r,issuedOf(i.id))}),'העדכון נכשל. ניהול הקטלוג דורש הרשאת עורך.')},
+  wpGoto:function(t){S.wpItem=t.dataset.id;S.wpSt='ALL';S.wpQ=t.dataset.q||'';S.tab='weapons';renderTabs();renderView()},
+  addItem:function(){openItemForm()},
+  editItem:function(t){openItemForm(t.dataset.id)},
+  delItem:async function(t){
+    if(!F||!can('manageInventory'))return;
+    var id=F.id, iss=issuedOf(id);
+    if(iss>0)return stampErr('אי אפשר למחוק: '+iss+' יחידות מוחתמות כרגע. זכה אותן קודם.');
+    if(!t.dataset.sure){t.dataset.sure='1';t.textContent='לחץ שוב למחיקה סופית';stampErr('הפריט יימחק מהקטלוג. התנועות הקודמות שלו יישארו ביומן.');return}
+    t.disabled=true;
+    try{await S.db.doc('inventory/'+id).delete();closeModal();toast('הפריט נמחק')}
+    catch(e){t.disabled=false;stampErr('המחיקה נכשלה. מחיקת פריטים דורשת הרשאת עורך.')}
+  },
+  breakdown:function(t){openBreakdown(t.dataset.id)},
+  coFilter:function(t){S.co=(S.co===t.dataset.v)?'ALL':t.dataset.v;var s=$('#co');if(s)s.value=S.co;renderList()},
+  invDom:function(t){
+    S.invDom=t.dataset.v;
+    var gd=S.invGroup!=='ALL'&&S.invGroup!=='NONE'?groupDomain(S.invGroup):'';
+    if(gd&&S.invDom!=='ALL'&&gd!==S.invDom)S.invGroup='ALL';
+    renderView();
+  },
+  companyStamp:function(t){closeModal();openCompanyStamp(t.dataset.v)},
+  cType:function(t){C.type=t.dataset.v;C.items={};renderCompanyStamp()},
+  cAddRow:function(){C.custom.push({name:'',qty:1});$('#cCustom').innerHTML=cCustomHtml()},
+  cDelRow:function(t){C.custom.splice(+t.dataset.i,1);$('#cCustom').innerHTML=cCustomHtml()},
+  cSubmit:submitCompany,
+  manageGroups:function(){if(can('manageInventory'))openGroups()},
+  manageSets:function(){if(can('manageInventory'))openSets()},
+  manageWeapons:function(){if(can('manageInventory'))openWeapons()},
+  iwAdd:function(){IW.push({serial:'',wno:''});$('#iWpRows').innerHTML=iwHtml()},
+  iwDel:function(t){IW.splice(+t.dataset.i,1);$('#iWpRows').innerHTML=iwHtml()},
+  wOpen:function(t){var w=S.weapons[t.dataset.id];if(!w)return;openWeapons(w.itemId,w.serial||w.weaponNo);W.assign=w.id;wRefresh()},
+  wRegister:wRegister,
+  wAdd:wAdd, wBulkGo:wBulkGo, wDel:wDel,
+  mUseAssigned:function(t){var id=t.dataset.id,w=S.weapons[t.dataset.wid];if(!w)return;var cur=M.units[id]||[],row={serial:w.serial||'',wno:w.weaponNo||'',wid:w.id},bi=-1;cur.forEach(function(u,n){if(bi<0&&!nz(u.serial)&&!nz(u.wno))bi=n});if(bi>=0)cur[bi]=row;else cur.push(row);M.units[id]=cur;mRefresh()},
+  mUPick:function(t){var u=M.units[t.dataset.id][+t.dataset.i],w=S.weapons[t.dataset.wid];if(!u||!w)return;u.serial=w.serial||'';u.wno=w.weaponNo||'';u.wid=w.id;u.fq='';mRefresh()},
+  wAssign:function(t){W.assign=t.dataset.id;W.aq='';wRefresh();var i=$('#wAq');if(i)i.focus()},
+  wUnassign:function(t){wSetSoldier(t.dataset.id,'')},
+  wAssignTo:function(t){var id=W.assign;W.assign='';W.aq='';if(id)wSetSoldier(id,t.dataset.id);wRefresh()},
+  wAssignCancel:function(){W.assign='';W.aq='';wRefresh()},
+  tCreate:tCreate, tRenameGo:tRenameGo, tDel:tDel,
+  tAdd:function(t){tChange(function(it){it[t.dataset.id]=1})},
+  tRemove:function(t){tChange(function(it){delete it[t.dataset.id]})},
+  mApplySet:applySet,
+  mUAdd:function(t){M.units[t.dataset.id].push({serial:'',wno:''});mRefresh()},
+  mUDel:function(t){M.units[t.dataset.id].splice(+t.dataset.i,1);mRefresh()},
+  relConfirm:function(t){var id=t.dataset.id;closeModal();guard(writeStatus(id,{value:'RELEASED'}),'לא ניתן לעדכן סטטוס. בדוק חיבור והרשאות.')},
+  gAdd:gAdd,
+  gRename:gRename,
+  gDel:gDel,
+  close:closeModal,
+  closeBg:function(t,e){if(e.target===t)closeModal()},
+  mType:function(t){M.type=t.dataset.v;M.items={};M.units={};M.ret={};renderStamp()},
+  mAll:function(){if(!M.soldierId)return;allowedItems().forEach(function(i){if(i.domain!==M.dom)return;var h=heldCount(M.soldierId,i.id);if(h<1)return;
+    if(isTracked(i)){var tr=unitsHeldBy(M.soldierId,i.id);if(tr.length){M.ret[i.id]={};tr.forEach(function(u){M.ret[i.id][u.key]=true})}var un=h-tr.length;if(un>0)M.items[i.id]=un}
+    else M.items[i.id]=h});mRefresh()},
+  mDom:function(t){M.dom=t.dataset.v;var q=$('#mIq');if(q)q.placeholder=mIqPlaceholder();mRefresh()},
+  mPickSoldier:function(t){M.soldierId=t.dataset.id;if(M.type==='return'){M.items={};M.ret={}}M.sq='';M.hi=0;$('#sArea').innerHTML=soldierArea();mRefresh()},
+  mClearSoldier:function(){M.soldierId='';M.units={};if(M.type==='return'){M.items={};M.ret={}}M.hi=0;$('#sArea').innerHTML=soldierArea();mRefresh();var i=$('#sSearch');if(i)i.focus()},
+  cDom:function(t){C.dom=t.dataset.v;var q=$('#cIq');if(q)q.placeholder=cIqPlaceholder();cRefresh()},
+  mSubmit:submitStamp,
+  saveUser:function(t){
+    var id=t.dataset.id, card=t.closest('.ucard'), perms={}, domains=[];
+    card.querySelectorAll('[data-k]').forEach(function(c){perms[c.dataset.k]=c.checked});
+    card.querySelectorAll('[data-d]').forEach(function(c){if(c.checked)domains.push(c.dataset.d)});
+    var rdoc={role:card.querySelector('[data-chg=roleSel]').value,perms:perms,domains:domains};
+    if(S.roles[id]&&S.roles[id].uid)rdoc.uid=S.roles[id].uid;
+    guard(S.db.doc('roles/'+id).set(rdoc).then(function(){toast('ההרשאות נשמרו')}));
+  },
+  approveReg:function(t){
+    var sid=t.dataset.sid, uid=t.dataset.id, cur=S.roles[sid], v=ROLES.viewer;
+    var doc=cur?{role:cur.role,perms:cur.perms||{},domains:cur.domains||[],uid:uid}:{role:'viewer',perms:v.perms,domains:v.domains,uid:uid};
+    guard(S.db.doc('roles/'+sid).set(doc).then(function(){toast('אושר. הגדר לו תפקיד והרשאות')}));
+  },
+  rejectReg:function(t){guard(S.db.doc('links/'+t.dataset.id).delete().then(function(){toast('הבקשה נדחתה')}))},
+  removeUser:function(t){guard(S.db.doc('roles/'+t.dataset.id).delete().then(function(){toast('המשתמש הוסר')}))},
+  addUser:function(t){
+    var id=t.dataset.id; S.names[id]=t.dataset.name||'';
+    var r=ROLES.viewer;
+    guard(S.db.doc('roles/'+id).set({role:'viewer',perms:r.perms,domains:r.domains}).then(function(){var u=$('#uSearch');if(u)u.value='';var x=$('#uRes');if(x)x.innerHTML='';toast('המשתמש נוסף. בחר לו תפקיד והרשאות')}));
+  },
+  addCompany:function(){
+    var v=$('#newCo').value.trim(); if(!v)return;
+    var c=companies().slice(); if(c.indexOf(v)>=0)return;
+    c.push(v); guard(saveConfig({companies:c}));
+  },
+  delCompany:function(t){
+    var c=companies().filter(function(x){return x!==t.dataset.v});
+    guard(saveConfig({companies:c}));
+  }
+};
+var CHG={
+  co:function(t){S.co=t.value;renderList()},
+  st:function(t){S.st=t.value;renderList()},
+  status:function(t){
+    var v=t.value, id=t.dataset.id, cur=statusOf(id);
+    if(v==='RELEASED'&&cur!=='RELEASED'&&holdsAny(id)){t.value=cur;openReleaseConfirm(id);return}
+    t.className='pill '+STATUS[v].c;
+    guard(writeStatus(id,{value:v}),'לא ניתן לעדכן סטטוס. בדוק חיבור והרשאות.');
+  },
+  attached:function(t){guard(writeStatus(t.dataset.id,{attached:t.checked}),'לא ניתן לעדכן סימון בסיפוח. בדוק חיבור והרשאות.')},
+  mRetToggle:function(t){var id=t.dataset.id,k=t.dataset.key;var r=M.ret[id]||(M.ret[id]={});if(t.checked)r[k]=true;else{delete r[k];if(!Object.keys(r).length)delete M.ret[id]}mRefresh()},
+  wpItem:function(t){S.wpItem=t.value;renderList()},
+  fco:function(t){S.fco=t.value;renderList()},
+  wpSt:function(t){S.wpSt=t.value;renderList()},
+  wSel:function(t){W.sel=t.value;W.q='';W.assign='';renderWeapons()},
+  wApson:wApson,
+  wSerial:function(t){wEdit(t,'serial')},
+  wNo:function(t){wEdit(t,'weaponNo')},
+  tSel:function(t){T.sel=t.value;T.q='';renderSets()},
+  tQty:function(t){var n=Number(t.value);if(!(n>=1)||Math.floor(n)!==n){t.value=(S.sets[T.sel].items||{})[t.dataset.id]||1;return}tChange(function(it){it[t.dataset.id]=n})},
+  iTrack:function(t){var b=$('#iWpWrap');if(b)b.hidden=!t.checked},
+  iDom:function(t){var s=$('#iGrp');if(s)s.innerHTML=groupOptions(t.value,s.value);var w=t.value==='נשקייה',b=$('#iWpWrap'),tw=$('#iTrackWrap'),tk=$('#iTrack');if(tw)tw.hidden=!w;if(b)b.hidden=!(w&&tk&&tk.checked);if(!F){var tt=$('#iTot');if(tt)tt.value=w?0:10}},
+  gDom:function(t){G.dom=t.value},
+  ig:function(t){S.invGroup=t.value;renderList()},
+  gSel:function(t){G.sel=t.value;G.q='';renderGroups()},
+  gToggle:function(t){
+    var id=t.dataset.id, it=S.inventory[id]; if(!it||!G||!G.sel)return;
+    var prev=it.group||'', nv=t.checked?G.sel:'';
+    it.group=nv;
+    S.db.doc('inventory/'+id).update({group:nv}).then(function(){gRefresh()}).catch(function(){it.group=prev;stampErr('השמירה נכשלה. ניהול קבוצות דורש הרשאת עורך.');gRefresh()});
+  },
+  cCo:function(t){C.company=t.value;C.items={};cRefresh()},
+  cToggle:function(t){var k=t.dataset.key;if(t.checked)C.items[k]=1;else delete C.items[k];cRefresh()},
+  mToggle:function(t){var id=t.dataset.id,it=S.inventory[id];
+    if(M.type==='issue'&&isTracked(it)){if(t.checked)M.units[id]=newUnitRows(id,1);else delete M.units[id]}
+    else{if(t.checked)M.items[id]=1;else delete M.items[id]}
+    mRefresh()},
+  roleSel:function(t){
+    var r=ROLES[t.value], card=t.closest('.ucard'); if(!r)return;
+    card.querySelectorAll('[data-k]').forEach(function(c){c.checked=!!r.perms[c.dataset.k]});
+    card.querySelectorAll('[data-d]').forEach(function(c){c.checked=r.domains.indexOf(c.dataset.d)>=0});
+  }
+};
+var searchSeq=0;
+var INP={
+  q:function(t){S.q=t.value;renderList()},
+  iq:function(t){S.invQ=t.value;renderList()},
+  lq:function(t){S.logQ=t.value;renderList()},
+  fq:function(t){S.fq=t.value;renderList()},
+  sSearch:function(t){M.sq=t.value;M.hi=0;var s=$('#sSug');if(s)s.innerHTML=soldierSug()},
+  mUFind:function(t){var u=M.units[t.dataset.id][+t.dataset.i];if(!u)return;u.fq=t.value;var s=$('#uSug-'+t.dataset.id+'-'+t.dataset.i);if(s)s.innerHTML=unitSugHtml(t.dataset.id,+t.dataset.i)},
+  mUSerial:function(t){M.units[t.dataset.id][+t.dataset.i].serial=t.value},
+  mUWno:function(t){M.units[t.dataset.id][+t.dataset.i].wno=t.value},
+  iwSerial:function(t){IW[+t.dataset.i].serial=t.value},
+  iwNo:function(t){IW[+t.dataset.i].wno=t.value},
+  wpq:function(t){S.wpQ=t.value;renderList()},
+  wq:function(t){W.q=t.value;var r=$('#wRows');if(r)r.innerHTML=wRowsHtml()},
+  wAq:function(t){W.aq=t.value;var r=$('#wAssignPane');if(r){var f=document.activeElement===t;r.innerHTML=wAssignHtml();if(f){var n=$('#wAq');if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length)}}}},
+  tq:function(t){T.q=t.value;var r=$('#tRes');if(r)r.innerHTML=setSearchHtml()},
+  mQty:function(t){M.items[t.dataset.id]=t.value===''?'':Number(t.value)},
+  mNotes:function(t){M.notes=t.value},
+  mSigner:function(t){M.signer=t.value},
+  cQty:function(t){C.items[t.dataset.key]=t.value===''?'':Number(t.value)},
+  cSigner:function(t){C.signer=t.value},
+  cRecv:function(t){C.receiver=t.value},
+  cNotes:function(t){C.notes=t.value},
+  mIq:function(t){M.iq=t.value;mRefresh()},
+  cIq:function(t){C.iq=t.value;cRefresh()},
+  gq:function(t){G.q=t.value;gRefresh()},
+  cCName:function(t){C.custom[+t.dataset.i].name=t.value},
+  cCQty:function(t){C.custom[+t.dataset.i].qty=t.value===''?'':Number(t.value)},
+  bkq:function(t){B.q=t.value;renderBk()},
+  uSearch:function(t){
+    var seq=++searchSeq, v=t.value.trim();
+    if(!S.user||!v){$('#uRes').innerHTML='';return}
+    S.user.search(v).then(function(hits){
+      if(seq!==searchSeq)return;
+      hits=hits.filter(function(h){return !S.roles[h.id]&&h.id!==S.uid});
+      $('#uRes').innerHTML=hits.length?hits.map(function(h){return '<div class="hit"><span>'+esc(h.name)+'</span><button class="btn sm" data-act="addUser" data-id="'+esc(h.id)+'" data-name="'+esc(h.name)+'">הוספה</button></div>'}).join(''):'<p class="note">לא נמצאו אנשים בשם הזה בארגון.</p>';
+    });
+  }
+};
+document.addEventListener('click',function(e){var t=e.target.closest('[data-act]');if(t&&ACT[t.dataset.act])ACT[t.dataset.act](t,e)});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&$('#modal').firstChild)closeModal();
+  if(M&&e.target&&e.target.id==='sSearch'){
+    var arr=soldierMatches(M.sq), n=Math.min(8,arr.length), box=$('#sSug');
+    if(e.key==='ArrowDown'&&n){e.preventDefault();M.hi=Math.min(n-1,(M.hi||0)+1);if(box)box.innerHTML=soldierSug()}
+    else if(e.key==='ArrowUp'&&n){e.preventDefault();M.hi=Math.max(0,(M.hi||0)-1);if(box)box.innerHTML=soldierSug()}
+    else if(e.key==='Enter'){e.preventDefault();if(arr[M.hi||0])ACT.mPickSoldier({dataset:{id:arr[M.hi||0].id}})}
+  }
+  if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('.item[data-act]')){e.preventDefault();ACT[e.target.dataset.act](e.target,e)}
+});
+document.addEventListener('change',function(e){var t=e.target.closest('[data-chg]');if(t&&CHG[t.dataset.chg])CHG[t.dataset.chg](t,e)});
+document.addEventListener('input',function(e){var t=e.target.closest('[data-inp]');if(t&&INP[t.dataset.inp])INP[t.dataset.inp](t,e)});
+document.addEventListener('submit',function(e){
+  e.preventDefault();
+  if(e.target.id==='fSoldier')submitSoldier();
+  else if(e.target.id==='fItem')submitItem();
+});
+document.addEventListener('focusout',function(){if(S.dirty)setTimeout(function(){if(S.dirty)renderList()},0)});
+
+/* ---------- boot & live data ---------- */
+var tm=0;
+function later(fn){clearTimeout(tm);tm=setTimeout(fn,30)}
+function ready(){return (S.owner||S.loaded.roles)&&(!S.perm||(S.loaded.soldiers&&S.loaded.status&&(!canSeeOps()||S.loaded.inventory)))}
+var OPS=['inventory','transactions','sets','weapons'];
+function startOps(){
+  if(S.opsStarted||!S.db||!canSeeOps())return;
+  S.opsStarted=true; OPS.forEach(watchCollection);
+}
+function startBase(){
+  if(S.baseStarted||!S.db||!S.perm)return;
+  S.baseStarted=true;
+  ['soldiers','status'].forEach(watchCollection);
+  S.db.doc('config/main').onSnapshot(function(d){S.config=d.exists?d.data():null;S.loaded.config=true;onData('config')},function(e){fail(e,'config')});
+}
+function onData(name){
+  if(name==='transactions')derive();
+  if(name==='roles'){computePerm();startBase();startOps()}
+  if(name==='transactions'||name==='status')syncHolds();
+  if(name==='roles'||name==='config')S.needAll=true;
+  later(function(){
+    if(!ready())return;
+    if(!S.booted){S.booted=true;S.needAll=false;computePerm();banner('');renderAll();return}
+    if(S.needAll){S.needAll=false;renderAll();return}
+    liveRender();
+  });
+}
+function watchCollection(name){
+  return S.db.collection(name).onSnapshot(function(snap){
+    var o={}; snap.docs.forEach(function(d){var x=Object.assign({},d.data());x.id=d.id;o[d.id]=x});
+    S[name]=o; S.loaded[name]=true; onData(name);
+  },function(e){fail(e,name)});
+}
+function fail(err,name){
+  var c=(err&&err.code)||'unknown';
+  S.errs.push((name||'?')+':'+c);
+  if(S.booted)banner(c==='revoked'?'הגישה לדף בוטלה. פנה למנהל.':'אירעה שגיאה בחיבור לנתונים ('+c+'). נסה לרענן את הדף.');
+}
+/* ---------- Firebase: downloads, login, user directory ---------- */
+window.FB_MODE=true;
+var DL={save:function(o){return new Promise(function(res,rej){try{
+  var b=(o.data instanceof Blob)?o.data:new Blob([o.data]);
+  var u=URL.createObjectURL(b), a=document.createElement('a');
+  a.href=u; a.download=o.filename; document.body.appendChild(a); a.click();
+  setTimeout(function(){URL.revokeObjectURL(u);a.remove()},1500); res();
+}catch(e){rej(e)}})}};
+var LOGMSG='', CLAIM_U=null;
+function showLogin(msg,canSign){
+  $('#app').hidden=true; $('#login').hidden=false; $('#claimBox').hidden=true;
+  $('#loginMsg').textContent=msg||LOGMSG||'';
+  $('#loginBtns').hidden=!canSign;
+}
+function showClaim(msg){
+  $('#app').hidden=true; $('#login').hidden=false; $('#loginBtns').hidden=true; $('#claimBox').hidden=false;
+  $('#claimWho').textContent=(CLAIM_U&&(CLAIM_U.email||CLAIM_U.displayName))||'';
+  $('#loginMsg').textContent=msg||'';
+}
+function makeUser(){
+  var cache={};
+  return {
+    me:function(){return Promise.resolve({id:S.uid,name:S.meName})},
+    isOwner:function(){return Promise.resolve(S.owner)},
+    profiles:function(ids){
+      var out={};
+      return Promise.all(ids.map(function(id){
+        if(cache[id]){out[id]=cache[id];return null}
+        if(S.soldiers[id]){cache[id]={name:S.soldiers[id].name};out[id]=cache[id];return null}
+        return S.db.doc('users/'+id).get().then(function(d){cache[id]={name:d.exists?(d.data().name||d.data().email||''):''}}).catch(function(){cache[id]={name:''}}).then(function(){out[id]=cache[id]});
+      })).then(function(){return out});
+    },
+    search:function(q){
+      q=String(q||'').toLowerCase().trim();
+      var res=[];
+      Object.keys(S.soldiers).forEach(function(id){
+        var s=S.soldiers[id], hay=((s.name||'')+' '+id+' '+(s.company||'')).toLowerCase();
+        if(hay.indexOf(q)>=0)res.push({id:id,name:(s.name||id)+' · מ״א '+id+(s.company?' · '+s.company:'')});
+      });
+      res=res.slice(0,8);
+      return S.db.collection('users').get().then(function(snap){
+        snap.docs.forEach(function(d){
+          var x=d.data(), hay=((x.name||'')+' '+(x.email||'')).toLowerCase();
+          if(hay.indexOf(q)>=0&&res.length<12)res.push({id:d.id,name:(x.name||x.email||d.id)+(x.name&&x.email?' ('+x.email+')':'')+' · Google'});
+        });
+        return res;
+      }).catch(function(){return res});
+    }
+  };
+}
+async function startSession(u){
+  S.fbUid=u.uid;
+  var key=u.uid, email=String(u.email||'').toLowerCase();
+  S.uid=key; S.meName=u.displayName||u.email||'';
+  try{await S.db.doc('users/'+u.uid).set({name:u.displayName||'',email:email,photo:u.photoURL||'',at:new Date().toISOString()},{merge:true})}catch(e){}
+  var od=null;
+  try{od=await S.db.doc('config/owner').get()}catch(e){}
+  if(od&&od.exists){S.owner=(od.data().uid===u.uid)}
+  else{
+    var want=String(window.OWNER_EMAIL||'').trim().toLowerCase();
+    if(!want||want===email){
+      try{await S.db.doc('config/owner').set({uid:u.uid,email:email,at:new Date().toISOString()});S.owner=true}catch(e){S.owner=false}
+    }
+  }
+  if(!S.owner){
+    key=null;
+    try{var lk=await S.db.doc('links/'+u.uid).get(); if(lk.exists)key=lk.data().soldierId}catch(e){}
+    if(!key){try{var rd=await S.db.doc('roles/'+u.uid).get(); if(rd.exists)key=u.uid}catch(e){}}
+    if(!key){CLAIM_U=u; showClaim(''); return}
+    S.uid=key;
+  }
+  LOGMSG='';
+  $('#login').hidden=true; $('#app').hidden=false;
+  computePerm();
+  if(S.owner){startBase();startOps();watchCollection('links');S.db.collection('roles').onSnapshot(function(snap){
+    var o={}; snap.docs.forEach(function(x){var y=Object.assign({},x.data());y.id=x.id;o[x.id]=y});
+    S.roles=o;S.loaded.roles=true;onData('roles');
+  },function(e){fail(e,'roles')});}
+  else{S.db.doc('roles/'+key).onSnapshot(function(x){
+    var o={}; if(x.exists){var y=Object.assign({},x.data());y.id=x.id;o[x.id]=y}
+    S.roles=o;S.loaded.roles=true;onData('roles');
+  },function(e){fail(e,'roles')});}
+  var t0=Date.now();
+  var wait=setInterval(function(){
+    if(S.booted){clearInterval(wait);banner('');return}
+    if(Date.now()-t0>10000){
+      banner('לא ניתן להגיע לנתונים כרגע'+(S.errs.length?' (שגיאה: '+S.errs.join(', ')+')':'')+'. הדף ממשיך לנסות.',true);
+    }
+  },1000);
+}
+function loginMsg(t){$('#loginMsg').textContent=t||''}
+async function boot(){
+  var cfg=window.firebaseConfig;
+  if(!window.firebase||!cfg||!cfg.apiKey||/PASTE|YOUR|XXXX/i.test(String(cfg.apiKey))){
+    showLogin('חסר firebaseConfig בראש קובץ ה-HTML. הדבק שם את ההגדרות מ-Firebase.',false);return;
+  }
+  firebase.initializeApp(cfg);
+  firebase.auth().languageCode='he';
+  S.db=firebase.firestore(); S.db.settings({ignoreUndefinedProperties:true});
+  S.user=makeUser();
+  $('#btnGoogle').addEventListener('click',function(){
+    var p=new firebase.auth.GoogleAuthProvider();
+    firebase.auth().signInWithPopup(p).catch(function(e){
+      if(e&&(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'))firebase.auth().signInWithRedirect(p);
+      else if(!e||e.code!=='auth/popup-closed-by-user')loginMsg('ההתחברות נכשלה ('+((e&&e.code)||'?')+')');
+    });
+  });
+  $('#btnClaim').addEventListener('click',function(){
+    var sid=$('#cNo').value.trim(), idn=$('#cId').value.trim(), ph=$('#cPhone').value.trim();
+    if(!/^[A-Za-z0-9_.:@+~-]{1,60}$/.test(sid)||String(idn).replace(/\D/g,'').length<5||String(ph).replace(/\D/g,'').length<9)return $('#loginMsg').textContent='נא למלא מספר אישי, ת״ז וטלפון';
+    $('#btnClaim').disabled=true; $('#loginMsg').textContent='מאמת…';
+    S.db.doc('links/'+CLAIM_U.uid).set({soldierId:sid,idNumber:idn,phone:ph,email:String(CLAIM_U.email||'').toLowerCase(),at:new Date().toISOString()}).then(function(){
+      $('#btnClaim').disabled=false; $('#claimBox').hidden=true; S.fbUid=null; startSession(CLAIM_U);
+    }).catch(function(){
+      $('#btnClaim').disabled=false;
+      $('#loginMsg').textContent='ההרשמה נכשלה. המספר האישי, ת״ז והטלפון חייבים להיות זהים לאלה שבכרטיס שלך במערכת. אם הם נכונים, פנה לשלישות לעדכון הכרטיס.';
+    });
+  });
+  $('#btnClaimOut').addEventListener('click',function(){firebase.auth().signOut().then(function(){location.reload()})});
+  firebase.auth().onAuthStateChanged(function(u){
+    if(!u){S.fbUid=null;showLogin('',true);return}
+    if(S.fbUid&&S.fbUid===u.uid)return;
+    startSession(u);
+  });
+}
+
+boot();
+})();
+</script>
+</body></html>
